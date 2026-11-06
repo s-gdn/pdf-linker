@@ -196,12 +196,12 @@ def build_workspace(window):
     w.preview.zoom_changed.connect(lambda percent: w.zoom_label.setText(f"{percent}%"))
     w.preview.box_drawn.connect(lambda rect: w.perform(lambda: w.add_box(rect)))
     w.preview.field_clicked.connect(w.select_field)
-    w.preview.field_hovered.connect(w.hover_field)
     rl.addWidget(w.preview, 1)
     w.field_card = FieldCard(w.preview.viewport())
     w.field_card.link_changed.connect(w.link_changed)
     w.field_card.remove_requested.connect(lambda key: w.perform(lambda: w.remove_box(key)))
     w.field_card.font_changed.connect(w.font_changed)
+    w.field_card.manual_changed.connect(w.manual_value_changed)
     footer = QHBoxLayout()
     w.preview_note = ElidedLabel("Ctrl + wheel to zoom / Drag to pan")
     w.preview_note.setObjectName("muted")
@@ -239,8 +239,8 @@ QMenuBar::item { background: transparent; padding: 4px 10px; }
 QMenuBar::item:selected { background: #303d55; border-radius: 3px; }
 QWidget#pdfControls QPushButton, QWidget#pdfControls QToolButton { padding: 4px 7px; border-radius: 4px; }
 QWidget#pdfControls QComboBox { padding: 4px; }
-QComboBox, QSpinBox, QLineEdit { background: #101722; border: 1px solid #344158; border-radius: 6px; padding: 6px; color: #e2e8f0; selection-background-color: #4f46a5; }
-QComboBox:focus, QSpinBox:focus, QLineEdit:focus { border-color: #818cf8; }
+QComboBox, QSpinBox, QLineEdit, QPlainTextEdit { background: #101722; border: 1px solid #344158; border-radius: 6px; padding: 6px; color: #e2e8f0; selection-background-color: #4f46a5; }
+QComboBox:focus, QSpinBox:focus, QLineEdit:focus, QPlainTextEdit:focus { border-color: #818cf8; }
 QComboBox QAbstractItemView { background: #202b3d; color: #e2e8f0; selection-background-color: #454581; border: 1px solid #53627c; }
 QTableWidget { background: #111925; alternate-background-color: #162131; gridline-color: #253246; border: 1px solid #28364b; border-radius: 6px; selection-background-color: #303d65; selection-color: white; }
 QHeaderView::section { background: #202b3d; color: #cbd5e1; padding: 8px; border: none; border-right: 1px solid #2c3a50; }

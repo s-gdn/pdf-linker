@@ -9,7 +9,7 @@ Fill PDF templates from Excel or CSV files. Preview changes, link fields, and ex
 ## Use
 
 1. Import a spreadsheet and PDF template.
-2. Click **Auto-link**, or hover over a PDF field to choose its column.
+2. Click **Auto-link**, or click a PDF field to choose its column.
 3. Check the spreadsheet rows you want, then use **File > Export PDFs**.
 4. Save your workspace with **File > Save project**.
 
@@ -28,11 +28,10 @@ Run these commands in PowerShell from the project folder:
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python -m pip install -e ".[dev]"
-.\.venv\Scripts\python -m pytest -q
 .\.venv\Scripts\python scripts\build_release.py
 ```
 
-The app is built in `dist/PDFLinker/`. The ready-to-share release is `dist/PDFLinker-Windows.zip`, with the app, examples, documentation, licences, and source code.
+The app is built in `dist/PDFLinker/`. The ready-to-share release is `dist/PDFLinker-Windows.zip`, with the app, documentation, licences, and source code.
 
 ## Licence
 

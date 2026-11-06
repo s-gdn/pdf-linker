@@ -11,13 +11,22 @@ Fillable fields are read automatically; the app also attempts to find blank boxe
 writing lines in the PDF. Image-only scans may need manually placed fields.</p>
 
 <h3>2. Link spreadsheet columns to PDF fields</h3>
-<p>Click <b>Auto-link</b> to match field and column names. Hover over a PDF field to review
+<p>Click <b>Auto-link</b> to match field and column names. If some fields remain unlinked,
+a second pass uses tooltips, nearby labels, section context and common abbreviations.
+It can combine numbered tenant names, extract address parts, and format DDMMYYYY dates
+when the PDF structure supports this. Existing links are preserved; uncertain matches stay unlinked.
+Click a PDF field to review
 or select its spreadsheet column. The card stays on that field while you interact with
 the card or its dropdown. Click <b>×</b> to remove a link.</p>
 <p><b>Fields → Field outlines</b> shows linked fields in green and unlinked fields in red.
 The outlines are excluded from exported PDFs. <b>Fields → Clear links</b> removes all
-links. Use <b>Fields → Draw field</b> to place an extra field; hover over a drawn or
+links. Use <b>Fields → Draw field</b> to place an extra field; click a drawn or
 detected field to change its text size or remove it.</p>
+
+<p>Click outside the card or press Escape to close it. Enable <b>Use a manual value</b>
+to type a value for the selected row. Enable <b>Persist across rows and jobs</b> to use
+that value for every row. Save the project before creating a job; existing jobs keep
+their saved settings. Row-only values are saved in projects but are excluded from jobs.</p>
 
 <h3>3. Preview and export</h3>
 <p>Click a spreadsheet row to preview it. Double-click a cell to edit its imported value.
@@ -27,6 +36,9 @@ scrollbars to pan. <b>View</b> contains Fit width, Fit page and Equal panel widt
 Export preview row generates only the displayed record. Filename pattern is in the
 same menu: <b>Form_{row}_{Name}</b> uses the spreadsheet row number and Name value.
 Each selected row creates one PDF. Existing files are never overwritten.</p>
+
+<p>Manual exports warn if any selected PDF has unfilled fields. Choose Yes to export
+anyway, or Cancel to return and fill them. Jobs do not show this warning.</p>
 
 <h3>4. Save a project</h3>
 <p><b>File → Save project</b> saves a .pdflinker workspace containing the inputs, edited

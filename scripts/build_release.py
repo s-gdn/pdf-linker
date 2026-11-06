@@ -13,7 +13,7 @@ def main():
     target = root / "dist" / "PDFLinker"
     source = target / "source"
     source.mkdir(exist_ok=True)
-    folders = ("pdflinker", "scripts", "tests", "docs", "examples")
+    folders = ("pdflinker", "scripts", "docs")
     files = ("README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "pyproject.toml", "PDFLinker.spec", "launcher.py", "run.bat", ".gitignore", ".gitattributes")
     for folder in folders:
         shutil.copytree(root / folder, source / folder, dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache"))
@@ -21,7 +21,7 @@ def main():
         shutil.copy2(root / name, source / name)
     for name in ("README.md", "LICENSE", "THIRD_PARTY_NOTICES.md"):
         shutil.copy2(root / name, target / name)
-    for folder in ("docs", "examples"):
+    for folder in ("docs",):
         shutil.copytree(root / folder, target / folder, dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__"))
     copy_dependency_licences(target)
     archive = shutil.make_archive(str(root / "dist" / "PDFLinker-Windows"), "zip", root / "dist", "PDFLinker")

@@ -14,7 +14,7 @@ import subprocess
 import tempfile
 import uuid
 
-from .core import output_name, read_sheet
+from .core import output_name, read_sheet, required_columns, assigned_fields
 from .project import read_project
 
 
@@ -55,14 +55,14 @@ def create_job(*, directory: Path, name: str, project: Path, spreadsheet: Path,
                identity_column=None, regenerate_changed=False) -> Path:
     project, spreadsheet, output = Path(project).resolve(), Path(spreadsheet).resolve(), Path(output).resolve()
     manifest, template, links, _, warnings = read_project(project)
-    if not template or not links or not manifest["spreadsheet_name"]:
-        raise ValueError("Choose a saved project with a PDF, a spreadsheet, and at least one field link.")
+    if not template or not assigned_fields(template.fields, links) or not manifest["spreadsheet_name"]:
+        raise ValueError("Choose a saved project with a PDF, a spreadsheet, and a field link or persistent manual value.")
     if warnings:
         raise ValueError("Fix and save the project's links before creating a job: " + " ".join(warnings))
     if type(start_row) is not int or start_row <= manifest["header_row"]:
         raise ValueError(f"Start at a physical spreadsheet row after header row {manifest['header_row']}.")
     headers, _ = read_sheet(spreadsheet, manifest["sheet"], manifest["header_row"])
-    missing = set(links.values()) - set(headers)
+    missing = required_columns(template.fields, links) - set(headers)
     if missing:
         raise ValueError("Live spreadsheet is missing linked columns: " + ", ".join(sorted(missing)))
     validate_options(headers, naming, identity_column, regenerate_changed)
@@ -231,13 +231,13 @@ def _run_job(path, progress, cancelled):
     if digest(snapshot.read_bytes()) != config["project_sha256"]:
         raise ValueError("The job's saved project has changed. Create a new job for the updated project.")
     manifest, template, links, _, warnings = read_project(snapshot)
-    if warnings or template is None or not links:
-        raise ValueError("The job's project does not have valid PDF field links.")
+    if warnings or template is None or not assigned_fields(template.fields, links):
+        raise ValueError("The job's project needs a valid field link or persistent manual value.")
     source = Path(config["spreadsheet"])
     if not source.is_file():
         raise ValueError(f"Live spreadsheet not found: {source}")
     headers, rows = read_sheet(source, manifest["sheet"], manifest["header_row"])
-    missing = set(links.values()) - set(headers)
+    missing = required_columns(template.fields, links) - set(headers)
     if missing:
         raise ValueError("Live spreadsheet is missing linked columns: " + ", ".join(sorted(missing)))
     identity_column = config.get("identity_column")

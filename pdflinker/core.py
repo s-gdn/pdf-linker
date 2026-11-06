@@ -116,6 +116,14 @@ class Field:
     manual: bool = False
     font_size: float = 11
     detected: bool = False
+    label: str = ""
+    context: str = ""
+    source_part: str = ""
+    companion_columns: tuple[str, ...] = ()
+    transform_source: str = ""
+    max_length: int = 0
+    constant_value: str | None = None
+    original_value: str = ""
 
 
 class Template:
@@ -144,7 +152,11 @@ class Template:
                         ordinal = occurrences.get(prefix, 0)
                         occurrences[prefix] = ordinal + 1
                         self.fields.append(Field(f"{prefix}:{ordinal}", widget.field_name or "Unnamed field",
-                                                 page.number, tuple(widget.rect), types[widget.field_type]))
+                                                 page.number, tuple(widget.rect), types[widget.field_type],
+                                                 label=widget.field_label or "", max_length=widget.text_maxlen or 0,
+                                                 original_value=display(widget.field_value)))
+            from .matching import enrich_context
+            enrich_context(doc, self.fields)
 
     def open(self):
         return fitz.open(stream=self.source, filetype="pdf")
@@ -211,7 +223,10 @@ class Template:
                            for box in boxes if abs(x0 - box.x0) < 2 and abs(x1 - box.x1) < 2):
                         continue
                     rect = fitz.Rect(x0, max(0, y - 21), x1, y - 1)
-                    if nearby_label(rect):
+                    rule_label = nearby_label(rect)
+                    prose = re.sub(r"^\d+(?:\.\d+)*[.\s]*", "", rule_label)
+                    if (rule_label and len(rule_label.split()) <= 10 and len(rule_label) <= 70
+                            and not rule_label.rstrip().endswith(".") and not ("." in prose and len(prose.split()) > 5)):
                         candidates.append((rect, True))
                 for rect, is_rule in sorted(candidates, key=lambda item: (item[0].y0, item[0].x0)):
                     bounds = page.rect * page.derotation_matrix
@@ -231,7 +246,7 @@ class Template:
                         if not field.manual:
                             existing = existing * page.rotation_matrix
                         overlap = (existing & displayed).get_area()
-                        if overlap > .65 * min(existing.get_area(), displayed.get_area()):
+                        if overlap > .65 * min(existing.get_area(), displayed.get_area()) or (is_rule and overlap > 0):
                             duplicate = True
                             break
                     if duplicate:
@@ -243,17 +258,16 @@ class Template:
                                   manual=True, detected=True)
                     self.fields.append(field)
                     added.append(field)
+            from .matching import enrich_context
+            enrich_context(doc, added)
         return added
 
-    def fill(self, links: dict[str, str], record: dict[str, str]) -> bytes:
+    def fill(self, links: dict[str, str], record: dict[str, str], overrides=None) -> bytes:
         with self.open() as doc:
             for field in self.fields:
-                column = links.get(field.key)
-                if column is None:
+                value = resolved_value(field, links, record, overrides)
+                if value is None:
                     continue
-                if column not in record:
-                    raise ValueError(f"Column '{column}' linked to '{field.name}' is missing.")
-                value = record[column]
                 page = doc[field.page]
                 if field.manual:
                     # Stored boxes use displayed page coordinates; convert for rotated pages.
@@ -287,17 +301,30 @@ class Template:
                     widget.update()
             return doc.tobytes(garbage=3, deflate=True)
 
+    def empty_fields(self, links, record, overrides=None):
+        empty = []
+        for field in self.fields:
+            value = resolved_value(field, links, record, overrides)
+            if value is None:
+                value = field.original_value
+                if field.kind in {"checkbox", "radio"} and value.casefold() == "off":
+                    value = ""
+            if not value.strip():
+                empty.append(field)
+        return empty
+
 
 def normalize(text: str) -> str:
     text = re.sub(r"([a-z])([A-Z])", r"\1 \2", text)
     return "".join(c for c in text.casefold() if c.isalnum())
 
 
-def auto_link(fields: list[Field], headers: list[str], existing: dict[str, str]) -> dict[str, str]:
+def auto_link(fields: list[Field], headers: list[str], existing: dict[str, str], rows=None) -> dict[str, str]:
     result = dict(existing)
     for field in fields:
-        if field.key in result:
+        if field.key in result or field.constant_value is not None:
             continue
+        field.source_part, field.companion_columns, field.transform_source = "", (), ""
         target = normalize(field.name)
         scores = sorted(((SequenceMatcher(None, target, normalize(h)).ratio(), h) for h in headers), reverse=True)
         if not scores:
@@ -307,7 +334,79 @@ def auto_link(fields: list[Field], headers: list[str], existing: dict[str, str])
         # Leave ambiguous matches for manual review.
         if best >= .78 and best - next_best >= .12:
             result[field.key] = column
+    if any(field.key not in result for field in fields):
+        from .matching import robust_links
+        result = robust_links(fields, headers, result, rows)
     return result
+
+
+def required_columns(fields, links):
+    columns = {links[field.key] for field in fields if field.key in links and field.constant_value is None}
+    for field in fields:
+        if field.constant_value is None and links.get(field.key) == field.transform_source:
+            columns.update(field.companion_columns)
+    return columns
+
+
+def assigned_fields(fields, links, overrides=None):
+    return {field.key for field in fields if field.key in links or field.constant_value is not None or field.key in (overrides or {})}
+
+
+def resolved_value(field, links, record, overrides=None):
+    if field.key in (overrides or {}):
+        return format_field_value(field, overrides[field.key])
+    if field.constant_value is not None:
+        return format_field_value(field, field.constant_value)
+    column = links.get(field.key)
+    if column is None:
+        return None
+    if column not in record:
+        raise ValueError(f"Column '{column}' linked to '{field.name}' is missing.")
+    return field_value(field, column, record)
+
+
+def field_value(field, column, record):
+    value = record.get(column, "")
+    if column == field.transform_source:
+        if field.companion_columns:
+            missing = [name for name in field.companion_columns if name not in record]
+            if missing:
+                raise ValueError("Missing combined field columns: " + ", ".join(missing))
+            value = "\n".join(record.get(name, "") for name in (column, *field.companion_columns) if record.get(name, "").strip())
+        if field.source_part:
+            parts = [part.strip() for part in re.split(r"[,\n]+", value) if part.strip()]
+            postcode = re.search(r"\b(?:GIR\s*0AA|[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2})\s*$", value, re.I)
+            if postcode:
+                remaining = value[:postcode.start()].rstrip(" ,\n")
+                parts = [part.strip() for part in re.split(r"[,\n]+", remaining) if part.strip()]
+            if field.source_part == "postcode":
+                value = postcode.group().strip().upper() if postcode else ""
+                if field.max_length and field.max_length <= 7:
+                    value = value.replace(" ", "")
+            elif field.source_part == "line1":
+                value = parts[0] if parts else ""
+            elif field.source_part == "line2":
+                # Only infer a separate city when the address has two non-postcode
+                # components. Preserve longer ambiguous addresses in the address lines.
+                value = ", ".join(parts[1:]) if len(parts) > 2 or not postcode else ""
+            elif field.source_part == "city":
+                value = parts[1] if len(parts) == 2 and postcode else ""
+    return format_field_value(field, value)
+
+
+def format_field_value(field, value):
+    if field.max_length and field.max_length <= 7 and normalize(field.label) in {"postcode", "postalcode"}:
+        value = value.replace(" ", "").upper()
+    if field.max_length == 8 and ("date" in field.label.casefold() or "ddmmyyyy" in normalize(field.label)):
+        if not value.strip() or normalize(value) in {"na", "none", "notapplicable"}:
+            return ""
+        for format in ("%Y-%m-%d", "%Y-%m-%d %H:%M:%S", "%d/%m/%Y", "%d-%m-%Y", "%d%m%Y"):
+            try:
+                return datetime.strptime(value.strip(), format).strftime("%d%m%Y")
+            except ValueError:
+                pass
+        raise ValueError(f"'{field.label}' needs a valid date; the selected column does not contain one.")
+    return value
 
 
 def save_profile(path: Path, template: Template, links: dict[str, str]):
@@ -328,8 +427,15 @@ def restore_profile(payload: dict, template: Template, headers: list[str]) -> tu
     if payload.get("version") != 1 or not isinstance(payload.get("links"), dict):
         raise ValueError("This is not a supported mapping file.")
     same = payload.get("template_sha256") == template.fingerprint
-    warnings, manual = [], []
+    warnings, manual, saved_specs = [], [], {}
     for raw in payload.get("fields", []):
+        saved = Field(**raw)
+        if (saved.constant_value is not None and not isinstance(saved.constant_value, str)
+                or saved.source_part not in {"", "line1", "line2", "city", "postcode"}
+                or not isinstance(saved.companion_columns, (list, tuple))
+                or any(not isinstance(name, str) for name in saved.companion_columns)):
+            raise ValueError("The mapping file contains an invalid field transformation.")
+        saved_specs[saved.key] = saved
         if not raw.get("manual"):
             continue
         if not same:
@@ -350,10 +456,32 @@ def restore_profile(payload: dict, template: Template, headers: list[str]) -> tu
         if key not in available:
             warnings.append(f"Skipped missing PDF field: {key}")
         elif column not in headers:
-            warnings.append(f"Skipped missing spreadsheet column: {column}")
+            if saved_specs.get(key) is None or saved_specs[key].constant_value is None:
+                warnings.append(f"Skipped missing spreadsheet column: {column}")
         else:
+            saved = saved_specs.get(key)
+            if saved and saved.transform_source == column:
+                missing = set(saved.companion_columns) - set(headers)
+                if missing:
+                    if saved.constant_value is None:
+                        warnings.append("Skipped combined link with missing columns: " + ", ".join(sorted(missing)))
+                    continue
+                if not same and (saved.source_part or saved.companion_columns):
+                    warnings.append(f"Review transformed link for changed PDF field: {saved.label or saved.name}")
+                    continue
             links[key] = column
     template.fields = [f for f in template.fields if not f.manual] + manual
+    for field in template.fields:
+        saved = saved_specs.get(field.key)
+        if saved and same:
+            field.constant_value = saved.constant_value
+        elif saved and saved.constant_value is not None:
+            field.constant_value = None
+            warnings.append(f"Review manual value for changed PDF field: {saved.label or saved.name}")
+        if saved and saved.transform_source and links.get(field.key) == saved.transform_source:
+            field.source_part = saved.source_part
+            field.companion_columns = tuple(saved.companion_columns)
+            field.transform_source = saved.transform_source
     return links, list(dict.fromkeys(warnings))
 
 

@@ -10,11 +10,12 @@ from .core import Template, profile_data, restore_profile
 
 def save_project(path: Path, *, template, spreadsheet_path, headers, rows, links,
                  checked, current_row, sheet, header_row, filename, outlines=True,
-                 spreadsheet_source_path=None):
+                 spreadsheet_source_path=None, row_values=None):
     manifest = {
         "format": "pdf-linker-project", "version": 1,
         "headers": headers, "rows": rows, "checked": checked, "current_row": current_row,
         "sheet": sheet, "header_row": header_row, "filename": filename, "outlines": outlines,
+        "row_values": {str(row): values for row, values in (row_values or {}).items() if values},
         "pdf_name": template.path.name if template else None,
         "profile": profile_data(template, links) if template else None,
         "spreadsheet_name": spreadsheet_path.name if spreadsheet_path else None,
@@ -59,6 +60,13 @@ def read_project(path: Path):
         if manifest.get("pdf_name"):
             template = Template(Path(manifest["pdf_name"]).name, archive.read("template.pdf"))
             links, warnings = restore_profile(manifest["profile"], template, headers)
+        row_values = manifest.get("row_values", {})
+        field_keys = {field.key for field in template.fields} if template else set()
+        if (not isinstance(row_values, dict) or any(not isinstance(key, str) or not key.isdecimal()
+                or not 0 <= int(key) < len(rows) or not isinstance(values, dict)
+                or any(field_key not in field_keys or not isinstance(value, str) for field_key, value in values.items())
+                for key, values in row_values.items())):
+            raise ValueError("The project contains invalid row-specific manual values.")
         spreadsheet = archive.read("spreadsheet") if manifest.get("spreadsheet_name") else None
         if spreadsheet is not None:
             name = Path(manifest["spreadsheet_name"]).name

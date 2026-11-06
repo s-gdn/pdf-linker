@@ -9,10 +9,10 @@ import threading
 import uuid
 
 import pymupdf as fitz
-from PySide6.QtCore import Qt, QRectF, Signal, QTimer, QThread, QUrl, QSettings
+from PySide6.QtCore import Qt, QRectF, Signal, QTimer, QThread, QUrl, QSettings, QEvent
 from PySide6.QtGui import QColor, QCursor, QIcon, QImage, QPainter, QPen, QPixmap, QKeySequence, QShortcut, QPalette, QDesktopServices
 from PySide6.QtWidgets import (
-    QApplication, QComboBox, QFileDialog,
+    QApplication, QCheckBox, QComboBox, QFileDialog, QPlainTextEdit,
     QGraphicsScene, QGraphicsView, QHBoxLayout, QInputDialog,
     QLabel, QLineEdit, QMainWindow, QMessageBox, QProgressDialog, QPushButton,
     QSpinBox, QSplitter, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
     QSizePolicy,
 )
 
-from .core import Field, Template, auto_link, output_name, read_sheet, sheet_names
+from .core import Field, Template, auto_link, assigned_fields, field_value, format_field_value, output_name, read_sheet, sheet_names
 from .project import read_project, save_project as write_project
 from .jobs import jobs_directory, list_jobs, result_message
 
@@ -29,6 +29,7 @@ class FieldCard(QFrame):
     link_changed = Signal(str, object)
     remove_requested = Signal(str)
     font_changed = Signal(str, int)
+    manual_changed = Signal(str, bool, str, bool)
 
     def __init__(self, parent):
         super().__init__(parent)
@@ -37,10 +38,7 @@ class FieldCard(QFrame):
         self.setAttribute(Qt.WidgetAttribute.WA_NoMousePropagation, True)
         self.field_key = None
         self.column_state = None
-        self.hide_timer = QTimer(self)
-        self.hide_timer.setSingleShot(True)
-        self.hide_timer.setInterval(220)
-        self.hide_timer.timeout.connect(self.hide_if_outside)
+        self.row_selected = False
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 14, 16, 14)
         layout.setSpacing(10)
@@ -68,6 +66,21 @@ class FieldCard(QFrame):
         self.value.setObjectName("muted")
         self.value.setWordWrap(True)
         layout.addWidget(self.value)
+        self.manual_enabled = QCheckBox("Use a manual value")
+        layout.addWidget(self.manual_enabled)
+        self.manual_input = QPlainTextEdit()
+        self.manual_input.setPlaceholderText("Enter the value for this PDF field")
+        self.manual_input.setFixedHeight(64)
+        layout.addWidget(self.manual_input)
+        self.persist_manual = QCheckBox("Persist across rows and jobs")
+        layout.addWidget(self.persist_manual)
+        self.manual_hint = QLabel()
+        self.manual_hint.setWordWrap(True)
+        self.manual_hint.setObjectName("muted")
+        layout.addWidget(self.manual_hint)
+        self.manual_enabled.toggled.connect(self.manual_edited)
+        self.persist_manual.toggled.connect(self.manual_edited)
+        self.manual_input.textChanged.connect(self.manual_edited)
         self.manual_options = QWidget()
         options = QHBoxLayout(self.manual_options)
         options.setContentsMargins(0, 0, 0, 0)
@@ -83,12 +96,24 @@ class FieldCard(QFrame):
         layout.addWidget(self.manual_options)
         self.hide()
 
-    def populate(self, field, headers, column, record):
+    def populate(self, field, headers, column, record, manual_value=None, persistent=False, row_selected=True):
         self.field_key = field.key
-        self.title.setText(field.name)
+        self.row_selected = row_selected
+        self.title.setText(field.label or field.name)
+        self.title.setToolTip(field.name)
         self.message.setText(f"Linked to: {column}" if column is not None else
                              "Field not linked. Use auto-link or choose column here.")
-        self.unlink.setVisible(column is not None)
+        if column and field.transform_source == column:
+            if field.companion_columns:
+                self.message.setText("Linked to: " + " + ".join((column, *field.companion_columns)))
+            if field.source_part:
+                descriptions = {"line1": "First address line", "line2": "Additional address lines",
+                                "city": "Town/city when identifiable", "postcode": "Postcode"}
+                self.message.setText(self.message.text() + "\nUses: " + descriptions[field.source_part])
+        active_manual = manual_value is not None
+        if active_manual:
+            self.message.setText("Manual value — all rows and jobs" if persistent else "Manual value — this row only")
+        self.unlink.setVisible(column is not None and not active_manual)
         state = (field.key, tuple(headers), column)
         if state != self.column_state:
             self.column_state = state
@@ -98,41 +123,44 @@ class FieldCard(QFrame):
             for header in headers:
                 self.columns.addItem(header, header)
             self.columns.setCurrentIndex(max(0, self.columns.findData(column)))
-            self.columns.setEnabled(bool(headers))
             self.columns.blockSignals(False)
-        self.value.setText(f"Preview: {record.get(column, '') or '—'}" if column else
-                           "Import a spreadsheet to choose a column." if not headers else "Choose a column to preview its value.")
+        self.columns.setEnabled(bool(headers) and not active_manual)
+        try:
+            preview_value = format_field_value(field, manual_value) if active_manual else field_value(field, column, record) if column and record else field.original_value
+            self.value.setText(f"Preview: {preview_value or '—'}" if column or active_manual else
+                               "Import a spreadsheet to choose a column." if not headers else "Choose a column to preview its value.")
+        except ValueError as error:
+            preview_value = ""
+            self.value.setText(f"Preview needs attention: {error}")
+        for control in (self.manual_enabled, self.manual_input, self.persist_manual):
+            control.blockSignals(True)
+        self.manual_enabled.setChecked(active_manual)
+        text = manual_value if active_manual else preview_value
+        if self.manual_input.toPlainText() != text:
+            self.manual_input.setPlainText(text)
+        self.persist_manual.setChecked(persistent if active_manual else not row_selected)
+        self.manual_input.setEnabled(active_manual)
+        self.persist_manual.setEnabled(active_manual and row_selected)
+        self.manual_hint.setText("Saved with the project; included in newly created jobs." if persistent else
+                                 "Applies to the selected row. Check persistence to use it for every row and new job." if row_selected else
+                                 "No row selected. A manual value will apply to every row.")
+        for control in (self.manual_enabled, self.manual_input, self.persist_manual):
+            control.blockSignals(False)
         self.manual_options.setVisible(field.manual)
         self.font.blockSignals(True)
         self.font.setValue(int(field.font_size))
         self.font.blockSignals(False)
         self.font.setEnabled(field.kind == "text")
 
-    def hide_if_outside(self):
-        inside = self.rect().contains(self.mapFromGlobal(QCursor.pos()))
-        if self.columns.view().isVisible():
-            self.hide_timer.start()
-        elif not inside:
-            self.hide()
-
-    def protects_pointer(self):
-        return self.isVisible() and (self.rect().contains(self.mapFromGlobal(QCursor.pos()))
-                                     or self.columns.view().isVisible())
-
-    def enterEvent(self, event):
-        self.hide_timer.stop()
-        super().enterEvent(event)
-
-    def leaveEvent(self, event):
-        self.hide_timer.start()
-        super().leaveEvent(event)
+    def manual_edited(self, *_):
+        self.manual_changed.emit(self.field_key, self.manual_enabled.isChecked(), self.manual_input.toPlainText(),
+                                 self.persist_manual.isChecked() or not self.row_selected)
 
 
 class Preview(QGraphicsView):
     box_drawn = Signal(object)
     field_clicked = Signal(str)
     zoom_changed = Signal(int)
-    field_hovered = Signal(str, object)
 
     def __init__(self):
         super().__init__()
@@ -160,6 +188,7 @@ class Preview(QGraphicsView):
         self.render_timer.setSingleShot(True)
         self.render_timer.setInterval(120)
         self.render_timer.timeout.connect(self.render_raster)
+        self.click_origin = None
 
     def set_drawing(self, enabled):
         self.drawing = enabled
@@ -258,7 +287,6 @@ class Preview(QGraphicsView):
         self.apply_fit()
 
     def wheelEvent(self, event):
-        self.field_hovered.emit("", None)
         if event.modifiers() & Qt.KeyboardModifier.ControlModifier:
             self.zoom_by(1.25 if event.angleDelta().y() > 0 else .8)
             event.accept()
@@ -272,10 +300,7 @@ class Preview(QGraphicsView):
             self.rubber = self.scene().addRect(QRectF(point, point), QPen(QColor("#e59122"), 1))
             return
         if event.button() == Qt.MouseButton.LeftButton and not self.drawing:
-            for rect, key in reversed(self.boxes):
-                if rect.contains(point):
-                    self.field_clicked.emit(key)
-                    break
+            self.click_origin = event.position().toPoint()
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event):
@@ -283,19 +308,7 @@ class Preview(QGraphicsView):
             rect = QRectF(self.origin, self.mapToScene(event.position().toPoint())).normalized().intersected(self.bounds)
             self.rubber.setRect(rect)
             return
-        if not self.drawing and not event.buttons():
-            point = self.mapToScene(event.position().toPoint())
-            for rect, key in reversed(self.boxes):
-                if rect.contains(point):
-                    self.field_hovered.emit(key, rect)
-                    break
-            else:
-                self.field_hovered.emit("", None)
         super().mouseMoveEvent(event)
-
-    def leaveEvent(self, event):
-        self.field_hovered.emit("", None)
-        super().leaveEvent(event)
 
     def mouseReleaseEvent(self, event):
         if self.origin is not None and self.rubber:
@@ -305,6 +318,13 @@ class Preview(QGraphicsView):
             if rect.width() >= 15 and rect.height() >= 10:
                 self.box_drawn.emit((rect.left(), rect.top(), rect.right(), rect.bottom()))
             return
+        if event.button() == Qt.MouseButton.LeftButton and self.click_origin is not None:
+            position = event.position().toPoint()
+            if (position - self.click_origin).manhattanLength() <= QApplication.startDragDistance():
+                point = self.mapToScene(position)
+                key = next((key for rect, key in reversed(self.boxes) if rect.contains(point)), "")
+                self.field_clicked.emit(key)
+            self.click_origin = None
         super().mouseReleaseEvent(event)
 
 
@@ -316,17 +336,19 @@ class ExportWorker(QThread):
         super().__init__()
         self.template = copy.deepcopy(template)
         self.links = dict(links)
-        self.jobs = jobs
+        self.jobs = copy.deepcopy(jobs)
         self.cancelled = threading.Event()
 
     def run(self):
         completed = 0
         try:
-            for path, record in self.jobs:
+            for job in self.jobs:
+                path, record = job[:2]
+                overrides = job[2] if len(job) > 2 else {}
                 if self.cancelled.is_set():
                     self.result.emit(completed, "Cancelled. Completed files have been kept.")
                     return
-                data = self.template.fill(self.links, record)
+                data = self.template.fill(self.links, record, overrides) if overrides else self.template.fill(self.links, record)
                 # Exclusive create also protects files created after preflight.
                 with path.open("xb") as stream:
                     try:
@@ -356,6 +378,7 @@ class MainWindow(QMainWindow):
         self.loaded_sheet = ""
         self.headers = []
         self.rows = []
+        self.row_values = {}
         self.links = {}
         self.active_field = None
         self.dirty = False
@@ -368,6 +391,7 @@ class MainWindow(QMainWindow):
         self.timer.setInterval(180)
         self.timer.timeout.connect(self.refresh_preview)
         self.build_ui()
+        QApplication.instance().installEventFilter(self)
         for key, action in [("Ctrl+S", self.save_project), ("Ctrl+Shift+S", lambda: self.save_project(True)),
                             ("Ctrl+O", self.open_project_dialog), ("Ctrl+E", self.export_checked)]:
             shortcut = QShortcut(QKeySequence(key), self)
@@ -391,6 +415,24 @@ class MainWindow(QMainWindow):
         from .ui import build_workspace
         build_workspace(self)
 
+    def eventFilter(self, watched, event):
+        card = getattr(self, "field_card", None)
+        if card is not None and card.isVisible():
+            if event.type() == QEvent.Type.MouseButtonPress:
+                point = event.globalPosition().toPoint()
+                inside = card.rect().contains(card.mapFromGlobal(point))
+                popup = card.columns.view().window()
+                inside_popup = card.columns.view().isVisible() and popup.frameGeometry().contains(point)
+                if not inside and not inside_popup:
+                    card.hide()
+            elif event.type() == QEvent.Type.KeyPress and event.key() == Qt.Key.Key_Escape:
+                if not card.columns.view().isVisible():
+                    card.hide()
+                    return True
+            elif event.type() == QEvent.Type.ApplicationDeactivate:
+                card.hide()
+        return super().eventFilter(watched, event)
+
     def schedule_preview(self, *_):
         self.timer.start()
 
@@ -400,6 +442,9 @@ class MainWindow(QMainWindow):
     def current_record(self):
         row = self.data_table.currentRow()
         return dict(zip(self.headers, self.rows[row])) if 0 <= row < len(self.rows) else {}
+
+    def current_row_values(self):
+        return self.row_values.get(self.data_table.currentRow(), {})
 
     def confirm_discard(self):
         if not self.dirty:
@@ -457,10 +502,15 @@ class MainWindow(QMainWindow):
         self.header_row.blockSignals(False)
 
     def set_data(self, headers, rows):
+        self.row_values = {}
         self.loaded_sheet = self.sheets.currentText()
         self.loaded_header = self.header_row.value()
         self.headers, self.rows = headers, rows
         stale = [key for key, column in self.links.items() if column not in headers]
+        if self.template:
+            stale.extend(field.key for field in self.template.fields
+                         if field.key in self.links and field.transform_source == self.links[field.key]
+                         and set(field.companion_columns) - set(headers) and field.key not in stale)
         for key in stale:
             del self.links[key]
         if stale:
@@ -495,6 +545,7 @@ class MainWindow(QMainWindow):
         if self.template and not self.confirm_discard():
             return
         self.template, self.links = template, {}
+        self.row_values = {}
         self.active_field = None
         self.mark_dirty()
         self.field_card.hide()
@@ -554,7 +605,7 @@ class MainWindow(QMainWindow):
             return
         field = next((f for f in self.template.fields if f.key == self.field_card.field_key), None)
         if field:
-            self.field_card.populate(field, self.headers, self.links.get(field.key), self.current_record())
+            self.populate_field_card(field)
         else:
             self.field_card.hide()
 
@@ -567,42 +618,68 @@ class MainWindow(QMainWindow):
             self.links[key] = column
         else:
             return
+        field = next(field for field in self.template.fields if field.key == key)
+        if column != field.transform_source:
+            field.source_part, field.companion_columns, field.transform_source = "", (), ""
         self.mark_dirty()
         self.update_field_card_values()
         self.schedule_preview()
 
-    def hover_field(self, key, rect):
-        if self.field_card.protects_pointer():
-            self.field_card.hide_timer.stop()
+    def populate_field_card(self, field):
+        row_values = self.current_row_values()
+        value = row_values.get(field.key, field.constant_value)
+        persistent = field.key not in row_values and field.constant_value is not None
+        self.field_card.populate(field, self.headers, self.links.get(field.key), self.current_record(),
+                                 value, persistent, self.data_table.currentRow() >= 0)
+
+    def manual_value_changed(self, key, enabled, value, persistent):
+        field = next((field for field in self.template.fields if field.key == key), None) if self.template else None
+        if field is None:
             return
-        if not key or not self.template or self.preview.drawing:
-            self.field_card.hide_timer.start()
+        row = self.data_table.currentRow()
+        if enabled and persistent:
+            field.constant_value = value
+            for values in self.row_values.values():
+                values.pop(key, None)
+        elif enabled and row >= 0:
+            field.constant_value = None
+            self.row_values.setdefault(row, {})[key] = value
+        elif enabled:
             return
-        field = next((f for f in self.template.fields if f.key == key), None)
-        if not field:
+        else:
+            field.constant_value = None
+            self.row_values.get(row, {}).pop(key, None)
+        self.mark_dirty()
+        self.update_field_card_values()
+        self.schedule_preview()
+
+    def show_field_card(self, key, rect):
+        if not self.template or self.preview.drawing:
             return
-        self.field_card.hide_timer.stop()
-        if self.field_card.field_key != key or not self.field_card.isVisible():
-            self.field_card.populate(field, self.headers, self.links.get(key), self.current_record())
-            self.field_card.setFixedWidth(min(370, self.preview.viewport().width() - 20))
-            self.field_card.adjustSize()
-            box = self.preview.mapFromScene(rect).boundingRect()
-            x = max(8, min(box.left(), self.preview.viewport().width() - self.field_card.width() - 8))
-            y = box.bottom() + 8
-            if y + self.field_card.height() > self.preview.viewport().height() - 8:
-                y = box.top() - self.field_card.height() - 8
-            y = max(8, min(y, self.preview.viewport().height() - self.field_card.height() - 8))
-            self.field_card.move(x, y)
-            self.field_card.show()
-            self.field_card.raise_()
+        field = next((field for field in self.template.fields if field.key == key), None)
+        if field is None:
+            return
+        self.populate_field_card(field)
+        self.field_card.setFixedWidth(min(370, self.preview.viewport().width() - 20))
+        self.field_card.adjustSize()
+        box = self.preview.mapFromScene(rect).boundingRect()
+        x = max(8, min(box.left(), self.preview.viewport().width() - self.field_card.width() - 8))
+        y = box.bottom() + 8
+        if y + self.field_card.height() > self.preview.viewport().height() - 8:
+            y = box.top() - self.field_card.height() - 8
+        y = max(8, min(y, self.preview.viewport().height() - self.field_card.height() - 8))
+        self.field_card.move(x, y)
+        self.field_card.show()
+        self.field_card.raise_()
 
     def select_field(self, key):
-        if self.field_card.protects_pointer():
+        if not key:
+            self.field_card.hide()
             return
         self.active_field = key
         for rect, field_key in self.preview.boxes:
             if key == field_key:
-                self.hover_field(key, rect)
+                self.show_field_card(key, rect)
                 break
 
     def page_changed(self, *_):
@@ -615,18 +692,19 @@ class MainWindow(QMainWindow):
             return
         try:
             record = self.current_record()
-            data = self.template.fill(self.links, record) if record else self.template.source
+            overrides = self.current_row_values()
+            data = self.template.fill(self.links, record, overrides) if record or assigned_fields(self.template.fields, {}, overrides) else self.template.source
+            assigned = assigned_fields(self.template.fields, self.links, overrides)
             self.preview.show_page(data, max(self.pages.currentIndex(), 0), self.template.fields,
-                                   self.active_field, self.outlines.isChecked(), self.links)
+                                   self.active_field, self.outlines.isChecked(), assigned)
             row = self.data_table.currentRow()
-            self.preview_note.setText(f"Preview: spreadsheet row {row + self.loaded_header + 1}  •  {len(self.links)} / {len(self.template.fields)} fields linked" if record else "Import a spreadsheet and select a row to preview filled values.")
+            self.preview_note.setText(f"Preview: spreadsheet row {row + self.loaded_header + 1}  •  {len(assigned)} / {len(self.template.fields)} fields assigned" if record else "Import a spreadsheet and select a row to preview filled values.")
             self.update_field_card_values()
         except Exception as error:
             # Do not leave an old, apparently valid filled preview on screen.
             self.preview.render_timer.stop()
             self.preview.page_item = None
             self.preview.scene().clear()
-            self.field_card.hide()
             self.preview_note.setText(f"Preview needs attention: {error}")
 
     def require_template(self):
@@ -638,7 +716,7 @@ class MainWindow(QMainWindow):
         if not self.headers:
             raise ValueError("Import a spreadsheet first.")
         before = len(self.links)
-        self.links = auto_link(self.template.fields, self.headers, self.links)
+        self.links = auto_link(self.template.fields, self.headers, self.links, rows=self.rows)
         self.dirty = self.dirty or len(self.links) != before
         self.update_project_label()
         self.update_links()
@@ -648,7 +726,7 @@ class MainWindow(QMainWindow):
         added = self.template.detect_fields()
         before = len(self.links)
         if self.headers:
-            self.links = auto_link(self.template.fields, self.headers, self.links)
+            self.links = auto_link(self.template.fields, self.headers, self.links, rows=self.rows)
         self.dirty = self.dirty or bool(added) or len(self.links) != before
         self.update_project_label()
         self.update_links()
@@ -657,7 +735,7 @@ class MainWindow(QMainWindow):
         detected = sum(f.detected for f in self.template.fields)
         self.pdf_label.setText(f"{self.template.path.name}  •  {len(self.template.sizes)} pages  •  {native} fillable / {detected} detected fields")
         if self.template.fields:
-            message = f"Found {len(self.template.fields)} fields; {len(self.links)} linked. Hover a field to choose or change its column."
+            message = f"Found {len(self.template.fields)} fields; {len(self.links)} linked. Click a field to edit its value or column."
         else:
             message = "No additional fields found. Detection looks for blank outlined boxes and labeled writing lines in PDF graphics; image-only scans need manual placement."
         self.preview_note.setText(message)
@@ -682,7 +760,7 @@ class MainWindow(QMainWindow):
                           manual=True)
             self.template.fields.append(field)
             self.mark_dirty()
-            self.links = auto_link(self.template.fields, self.headers, self.links)
+            self.links = auto_link(self.template.fields, self.headers, self.links, rows=self.rows)
             self.update_links()
             self.draw_button.setChecked(False)
             self.preview.set_drawing(False)
@@ -695,6 +773,8 @@ class MainWindow(QMainWindow):
             raise ValueError("Only detected or drawn fields can be removed. Use × to unlink a native PDF field.")
         self.template.fields.remove(field)
         self.links.pop(field.key, None)
+        for values in self.row_values.values():
+            values.pop(field.key, None)
         self.active_field = None
         self.mark_dirty()
         self.field_card.hide()
@@ -728,7 +808,7 @@ class MainWindow(QMainWindow):
                       checked=self.checked_rows(), current_row=self.data_table.currentRow(),
                       sheet=self.sheets.currentText(), header_row=self.header_row.value(),
                       filename=self.filename.text(), outlines=self.outlines.isChecked(),
-                      spreadsheet_source_path=self.spreadsheet_source_path or "")
+                      spreadsheet_source_path=self.spreadsheet_source_path or "", row_values=self.row_values)
         self.project_path = path
         self.dirty = False
         self.update_project_label()
@@ -773,6 +853,7 @@ class MainWindow(QMainWindow):
         self.header_row.blockSignals(False)
         self.sheet_label.setText(manifest.get("spreadsheet_name") or "No spreadsheet imported")
         self.set_data(manifest["headers"], manifest["rows"])
+        self.row_values = {int(row): values for row, values in manifest.get("row_values", {}).items()}
         self.data_table.blockSignals(True)
         for row in manifest["checked"]:
             self.data_table.item(row, 0).setCheckState(Qt.CheckState.Checked)
@@ -843,8 +924,32 @@ class MainWindow(QMainWindow):
         self.require_template()
         if not self.rows:
             raise ValueError("Import a spreadsheet containing data rows first.")
-        if not self.links:
-            raise ValueError("Link at least one PDF field to a spreadsheet column first.")
+        if not assigned_fields(self.template.fields, self.links) and not any(self.row_values.values()):
+            raise ValueError("Link a PDF field or enter a manual value first.")
+
+    def confirm_unfilled(self, indices):
+        missing = []
+        for index in indices:
+            record = dict(zip(self.headers, self.rows[index]))
+            fields = self.template.empty_fields(self.links, record, self.row_values.get(index))
+            if fields:
+                missing.append((index, fields))
+        if not missing:
+            return True
+        count = sum(len(fields) for _, fields in missing)
+        details = []
+        for index, fields in missing[:5]:
+            names = ", ".join(field.label or field.name for field in fields[:5])
+            if len(fields) > 5:
+                names += f", and {len(fields) - 5} more"
+            details.append(f"Row {index + self.loaded_header + 1}: {names}")
+        if len(missing) > 5:
+            details.append(f"Plus {len(missing) - 5} more rows.")
+        message = (f"There are {count} unfilled fields across {len(missing)} PDF(s).\n\n" +
+                   "\n".join(details) + "\n\nExport anyway?")
+        return QMessageBox.warning(self, "Unfilled PDF fields", message,
+                                   QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.Cancel,
+                                   QMessageBox.StandardButton.Cancel) == QMessageBox.StandardButton.Yes
 
     def create_job(self):
         from .job_ui import CreateJobDialog
@@ -917,7 +1022,8 @@ class MainWindow(QMainWindow):
             target = Path(path)
             if target.exists():
                 raise ValueError("That file already exists. Choose a new filename.")
-            self.start_export([(target, record)])
+            if self.confirm_unfilled([row]):
+                self.start_export([(target, record, dict(self.row_values.get(row, {})))])
 
     def export_checked(self):
         self.validate_export()
@@ -937,8 +1043,9 @@ class MainWindow(QMainWindow):
             path = Path(folder) / name
             if path.exists():
                 raise ValueError(f"'{name}' already exists. Choose another folder or filename pattern.")
-            jobs.append((path, record))
-        self.start_export(jobs)
+            jobs.append((path, record, dict(self.row_values.get(index, {}))))
+        if self.confirm_unfilled(selected):
+            self.start_export(jobs)
 
     def start_export(self, jobs):
         if self.worker and self.worker.isRunning():
@@ -968,6 +1075,7 @@ class MainWindow(QMainWindow):
             event.ignore()
             return
         if self.confirm_discard():
+            QApplication.instance().removeEventFilter(self)
             event.accept()
         else:
             event.ignore()

@@ -18,10 +18,12 @@ python -m venv .venv
 
 1. **Import spreadsheet** in the Spreadsheet panel: choose XLSX, XLS, or UTF-8 CSV. Select a worksheet and its header row. Each subsequent row is one record; blank rows remain visible to preserve original row numbers.
 2. **Import PDF** in the PDF panel: native form fields are read and detection automatically attempts to find additional blank outlined boxes and labeled writing lines. Nearby text supplies names; small square boxes are inferred as checkboxes. Matching columns are linked when a spreadsheet is available. No separate detection button is needed.
-3. **Auto-link** in the PDF panel suggests matches using field and column names. Ambiguous matches remain unlinked. **Fields → Clear links** removes all mappings while keeping the detected fields.
-4. Hover over a PDF field to manage its link directly on the page. The card stays on its current field while the pointer is over it or its column dropdown, including when it covers other fields. Linked fields show the column name and an **×** button to remove that link. Unlinked fields display **“Field not linked. Use auto-link or choose column here.”** with a dropdown of spreadsheet columns. The dropdown also changes existing links. One column can populate several fields. Enable **Fields → Field outlines** (also in View) to see linked fields in green and unlinked fields in red; these colors are excluded from exports.
+3. **Auto-link** first matches field and column names. If fields remain unlinked, a second pass uses PDF tooltips, nearby visible labels, section context, and common abbreviations such as PM (property manager), FREQ, and R/I (rent increase). It keeps landlord, agent, and tenant details separate. Existing links are preserved, and ambiguous or unsupported fields remain unlinked. **Fields → Clear links** removes all mappings while keeping the detected fields.
+
+   Where the PDF structure is clear, the fallback can combine numbered tenant-name columns into a plural names field, extract address lines and postcodes from a full address, and format dates for DDMMYYYY boxes. The field card shows the combined columns or selected address component and previews the actual output. County values and ambiguous address components are not invented. Review the preview before exporting. These transformations are saved with projects and reused by jobs.
+4. Click a PDF field to manage its link directly on the page. The card stays on its current field while the pointer is over it or its column dropdown, including when it covers other fields. Linked fields show the column name and an **×** button to remove that link. Unlinked fields display **“Field not linked. Use auto-link or choose column here.”** with a dropdown of spreadsheet columns. The dropdown also changes existing links. One column can populate several fields. Enable **Fields → Field outlines** (also in View) to see linked fields in green and unlinked fields in red; these colors are excluded from exports.
 5. Click a spreadsheet row to preview its values. Double-click a cell to edit the imported copy. Preview updates after a short delay. New templates open at **Fit width**. Use **+**, **−**, or **Ctrl + mouse wheel** to zoom beyond the window, then drag the page or use scrollbars to pan. Manual zoom persists during resizing and live updates. **View → Fit width** and **View → Fit page** adjust the page size; there is no separate Fit button in the PDF panel.
-6. **Fields → Draw field** is optional: drag a rectangle on the PDF and name it. Hover over a detected or drawn field to change its text size or remove it. Native fields can be unlinked but cannot be removed from the source template.
+6. **Fields → Draw field** is optional: drag a rectangle on the PDF and name it. Click a detected or drawn field to change its text size or remove it. Native fields can be unlinked but cannot be removed from the source template.
 7. Use **File → Save project** and **File → Open project** to save/reopen a `.pdflinker` workspace. **File → Open recent** remembers the ten most recently opened or saved projects between sessions, newest first. Reopening or saving an existing entry moves it to the top. **Clear recent projects** clears the list without deleting files. Projects embed the original PDF and spreadsheet, current edited table values, field placements, links, checked rows, preview row, filename pattern, and outline setting. They can be moved to another computer without the original input files. Save updates the current project; **Save project as** or **Ctrl+Shift+S** saves a copy. **Ctrl+S** saves and **Ctrl+O** opens. Unsaved changes are marked with an asterisk in the window title.
 8. Check the **Export** checkbox beside the rows to generate, or use **Check all** / **Uncheck all**. Open **File → Export PDFs**, then choose **Export checked rows** (one PDF per checked row) or **Export preview row** (the displayed record). **Filename pattern** is in the same menu. **Ctrl+E** exports checked rows.
 
@@ -55,14 +57,6 @@ Filenames default to `Form_{row}.pdf`, where `{row}` is the original spreadsheet
 
 Table edits do not alter the source workbook; save a project to preserve them. Switching worksheets reloads the original workbook values and resets table edits and row checks. Projects contain copies of work documents and spreadsheet data; exported PDFs contain the selected record. All processing and saving stay on the computer.
 
-## Example files
-
-`examples/people.xlsx` and `examples/employee_form.pdf` demonstrate auto-linking. `examples/employee_flat.pdf` demonstrates automatic detection of four text boxes and an Approved checkbox, without drawing fields by hand. All example data is fictional. Regenerate these files with:
-
-```powershell
-.\.venv\Scripts\python examples\create_examples.py
-```
-
 ## Supported behavior and limits
 
 - Text fields, checkboxes, dropdowns, lists, radio buttons, and manually placed text are supported. Checkbox true values: `yes`, `true`, `y`, `1`, `x`, `checked`, `on` (case-insensitive). Other values clear the checkbox. Radio values must match the button's PDF export state. Choice values must match an allowed option.
@@ -75,3 +69,11 @@ Table edits do not alter the source workbook; save a project to preserve them. S
 ## Building the app
 
 See the [README build instructions](../README.md#build-for-windows). The build script packages the icon, examples, user guide, licence files, and source with the Windows app.
+
+## Manual values and unfilled fields
+
+Click a PDF field to open its card. Click outside the card or press Escape to close it. Enable **Use a manual value** to type a value for the selected row. **Persist across rows and jobs** applies the value to every row and includes it in newly created jobs. Save the project before creating a job; existing jobs keep their saved settings. Disable the manual value to return to the spreadsheet link. Manual values also turn the field outline green.
+
+Row-specific manual values are saved with the project and used by manual exports, but are excluded from jobs. Reloading a worksheet clears row-specific values along with table edits.
+
+Both manual export options check the selected rows for unfilled fields, including blank spreadsheet values. Choose Yes to export anyway or Cancel to return to editing. Jobs run without this warning.
