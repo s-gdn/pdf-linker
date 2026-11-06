@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pdf-linker"
+version = "0.1.0"
+description = "Local spreadsheet-to-PDF desktop workspace"
+readme = "README.md"
+license = "AGPL-3.0-only"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+dependencies = ["PySide6>=6.8,<7", "PyMuPDF>=1.26,<2", "openpyxl>=3.1,<4", "xlrd>=2.0,<3"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pyinstaller>=6"]
+
+[project.gui-scripts]
+pdf-linker = "pdflinker.app:main"
+
+[tool.setuptools.packages.find]
+include = ["pdflinker*"]
+
+[tool.setuptools.package-data]
+pdflinker = ["assets/*.svg", "assets/*.png", "assets/*.ico"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
