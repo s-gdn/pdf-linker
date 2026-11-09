@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import csv
+import copy
 from dataclasses import asdict, dataclass
 from datetime import date, datetime
 from difflib import SequenceMatcher
 import hashlib
 import html
 import json
+import math
 from pathlib import Path
 import re
 
@@ -124,6 +126,17 @@ class Field:
     max_length: int = 0
     constant_value: str | None = None
     original_value: str = ""
+    pdf_label: str = ""
+    section: str = ""
+    question: str = ""
+    nearby_label: str = ""
+    nearby_labels: tuple[str, ...] = ()
+    section_id: str = ""
+    section_path: tuple[str, ...] = ()
+    label_inferred: bool = False
+    match_basis: str = ""
+    match_score: float | None = None
+    match_note: str = ""
 
 
 class Template:
@@ -154,12 +167,30 @@ class Template:
                         self.fields.append(Field(f"{prefix}:{ordinal}", widget.field_name or "Unnamed field",
                                                  page.number, tuple(widget.rect), types[widget.field_type],
                                                  label=widget.field_label or "", max_length=widget.text_maxlen or 0,
-                                                 original_value=display(widget.field_value)))
+                                                 original_value=display(widget.field_value), pdf_label=widget.field_label or ""))
             from .matching import enrich_context
-            enrich_context(doc, self.fields)
+            self.document_context = enrich_context(doc, self.fields)
 
     def open(self):
         return fitz.open(stream=self.source, filetype="pdf")
+
+    def refresh_context(self):
+        from .matching import enrich_context
+        with self.open() as doc:
+            self.document_context = enrich_context(doc, self.fields)
+
+    def matching_payload(self, headers, links=None):
+        """Complete layout evidence for matching/review; no spreadsheet records."""
+        payload=copy.deepcopy(self.document_context)
+        payload['columns']=list(headers)
+        payload['links']=dict(links or {})
+        payload['fields']={f.key:dict(id=f.name,pdf_label=f.pdf_label,label=f.label,page=f.page,
+            bbox=list(f.rect),section=f.section,question=f.question,section_id=f.section_id,
+            section_path=list(f.section_path),nearby_labels=list(f.nearby_labels),
+            label_inferred=f.label_inferred,match_basis=f.match_basis,
+            match_score=f.match_score,match_note=f.match_note,
+            locked=f.key in (links or {}) or f.constant_value is not None) for f in self.fields}
+        return payload
 
     def detect_fields(self) -> list[Field]:
         """Infer blank boxes / writing rules and their nearest labels in vector PDFs.
@@ -259,7 +290,7 @@ class Template:
                     self.fields.append(field)
                     added.append(field)
             from .matching import enrich_context
-            enrich_context(doc, added)
+            self.document_context = enrich_context(doc, self.fields)
         return added
 
     def fill(self, links: dict[str, str], record: dict[str, str], overrides=None) -> bytes:
@@ -320,20 +351,8 @@ def normalize(text: str) -> str:
 
 
 def auto_link(fields: list[Field], headers: list[str], existing: dict[str, str], rows=None) -> dict[str, str]:
-    result = dict(existing)
-    for field in fields:
-        if field.key in result or field.constant_value is not None:
-            continue
-        field.source_part, field.companion_columns, field.transform_source = "", (), ""
-        target = normalize(field.name)
-        scores = sorted(((SequenceMatcher(None, target, normalize(h)).ratio(), h) for h in headers), reverse=True)
-        if not scores:
-            continue
-        best, column = scores[0]
-        next_best = scores[1][0] if len(scores) > 1 else 0
-        # Leave ambiguous matches for manual review.
-        if best >= .78 and best - next_best >= .12:
-            result[field.key] = column
+    from .field_matching import context_links
+    result = context_links(fields, headers, existing, rows)
     if any(field.key not in result for field in fields):
         from .matching import robust_links
         result = robust_links(fields, headers, result, rows)
@@ -379,6 +398,10 @@ def field_value(field, column, record):
             if postcode:
                 remaining = value[:postcode.start()].rstrip(" ,\n")
                 parts = [part.strip() for part in re.split(r"[,\n]+", remaining) if part.strip()]
+            # Supported compact UK layouts are street/city/postcode and
+            # street/locality/city/postcode. Keep longer or unanchored addresses
+            # intact in line 2: their final component may be a county or country.
+            city_index = len(parts)-1 if postcode and 2 <= len(parts) <= 3 else None
             if field.source_part == "postcode":
                 value = postcode.group().strip().upper() if postcode else ""
                 if field.max_length and field.max_length <= 7:
@@ -386,11 +409,9 @@ def field_value(field, column, record):
             elif field.source_part == "line1":
                 value = parts[0] if parts else ""
             elif field.source_part == "line2":
-                # Only infer a separate city when the address has two non-postcode
-                # components. Preserve longer ambiguous addresses in the address lines.
-                value = ", ".join(parts[1:]) if len(parts) > 2 or not postcode else ""
+                value = ", ".join(parts[1:city_index] if city_index is not None else parts[1:])
             elif field.source_part == "city":
-                value = parts[1] if len(parts) == 2 and postcode else ""
+                value = parts[city_index] if city_index is not None else ""
     return format_field_value(field, value)
 
 
@@ -430,6 +451,10 @@ def restore_profile(payload: dict, template: Template, headers: list[str]) -> tu
     warnings, manual, saved_specs = [], [], {}
     for raw in payload.get("fields", []):
         saved = Field(**raw)
+        if not isinstance(saved.match_note,str):raise ValueError('The mapping file contains an invalid matching note.')
+        if saved.match_score is not None and (type(saved.match_score) not in (int,float)
+                or not math.isfinite(saved.match_score) or not 0<=saved.match_score<=1):
+            raise ValueError('The mapping file contains an invalid model score.')
         if (saved.constant_value is not None and not isinstance(saved.constant_value, str)
                 or saved.source_part not in {"", "line1", "line2", "city", "postcode"}
                 or not isinstance(saved.companion_columns, (list, tuple))
@@ -475,6 +500,9 @@ def restore_profile(payload: dict, template: Template, headers: list[str]) -> tu
         saved = saved_specs.get(field.key)
         if saved and same:
             field.constant_value = saved.constant_value
+            field.match_basis = saved.match_basis
+            field.match_score = saved.match_score
+            field.match_note = saved.match_note
         elif saved and saved.constant_value is not None:
             field.constant_value = None
             warnings.append(f"Review manual value for changed PDF field: {saved.label or saved.name}")

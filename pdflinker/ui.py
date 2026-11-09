@@ -58,6 +58,8 @@ def build_workspace(window):
     file_menu.addSeparator()
     file_menu.addAction("Create job…", lambda: w.perform(w.create_job))
     file_menu.addSeparator()
+    file_menu.addAction('Settings…', lambda: w.perform(w.open_settings))
+    file_menu.addSeparator()
     file_menu.addAction("Exit", w.close)
     view_menu = menu_bar.addMenu("View")
     view_menu.addAction("Zoom in", lambda: w.preview.zoom_by(1.25))
@@ -152,7 +154,28 @@ def build_workspace(window):
     flow = FlowLayout(controls)
     w.pdf_controls = controls
     w.button("Import PDF", w.import_pdf, flow)
-    w.button("Auto-link", w.auto_match, flow)
+    w.exact_link_button = w.button("Exact link", w.auto_match, flow)
+    w.exact_link_button.setToolTip(
+        '<b>Exact link</b><br>'
+        'Checks original PDF field names first, then authored tooltips and section-qualified detected labels. '
+        'Links only unique exact matches to spreadsheet columns. '
+        'Case, punctuation and word spacing are normalised; different wording is not guessed.<br><br>'
+        '<b>Prepare your files:</b> Use one clear, unique column heading per spreadsheet column. '
+        'Give PDF fields matching names, or place matching readable text labels near them. '
+        'Image-only labels need selectable text or manually named fields. Existing links and shared manual values are kept.')
+    w.suggest_links_button = w.button("Suggest links", w.suggest_links, flow)
+    w.suggest_links_button.setToolTip(
+        '<b>Suggest links</b><br>'
+        'Checks close matches to original field names first, then document sections, questions and nearby labels. '
+        'Uses the included Medium models for unresolved fields with similar meanings. '
+        'Chooses each field\'s highest combined model score (minimum 40/100 by default). '
+        'Scores below the uncertainty threshold (70 by default) have yellow outlines. '
+        'Scores are similarities, not probabilities. Change both thresholds in File > Settings > Auto-link. '
+        'Runs locally without downloading models or uploading documents; review suggestions before exporting.<br><br>'
+        '<b>Prepare your files:</b> Use descriptive spreadsheet headings and readable PDF labels. '
+        'Include roles such as Landlord email and Agent email instead of several generic Email labels. '
+        'Keep labels close to their fields. Image-only scans need readable text or manually named fields. '
+        'Existing links and shared manual values are kept.')
     fields = QToolButton()
     fields.setText("Fields")
     fields.setPopupMode(QToolButton.ToolButtonPopupMode.InstantPopup)
@@ -209,6 +232,11 @@ def build_workspace(window):
     linked = QLabel("Linked")
     linked.setObjectName("linkedLegend")
     footer.addWidget(linked)
+    uncertain = QLabel('Uncertain')
+    uncertain.setObjectName('uncertainLegend')
+    uncertain.setToolTip(f'Model suggestions scoring below {w.uncertainty_threshold}/100')
+    w.uncertain_legend=uncertain
+    footer.addWidget(uncertain)
     unlinked = QLabel("Not linked")
     unlinked.setObjectName("unlinkedLegend")
     footer.addWidget(unlinked)
@@ -227,6 +255,7 @@ QLabel { background: transparent; border: none; }
 QLabel#panelTitle { font-size: 15px; font-weight: 600; color: #f8fafc; }
 QLabel#muted { color: #94a3b8; }
 QLabel#linkedLegend { color: #36d399; }
+QLabel#uncertainLegend { color: #facc15; }
 QLabel#unlinkedLegend { color: #fb7185; }
 QPushButton, QToolButton { background: #222c3d; border: 1px solid #344158; border-radius: 6px; padding: 8px 12px; color: #e2e8f0; }
 QPushButton:hover, QToolButton:hover { background: #2d3950; border-color: #657494; }
@@ -239,8 +268,8 @@ QMenuBar::item { background: transparent; padding: 4px 10px; }
 QMenuBar::item:selected { background: #303d55; border-radius: 3px; }
 QWidget#pdfControls QPushButton, QWidget#pdfControls QToolButton { padding: 4px 7px; border-radius: 4px; }
 QWidget#pdfControls QComboBox { padding: 4px; }
-QComboBox, QSpinBox, QLineEdit, QPlainTextEdit { background: #101722; border: 1px solid #344158; border-radius: 6px; padding: 6px; color: #e2e8f0; selection-background-color: #4f46a5; }
-QComboBox:focus, QSpinBox:focus, QLineEdit:focus, QPlainTextEdit:focus { border-color: #818cf8; }
+QComboBox, QSpinBox, QDoubleSpinBox, QLineEdit, QPlainTextEdit { background: #101722; border: 1px solid #344158; border-radius: 6px; padding: 6px; color: #e2e8f0; selection-background-color: #4f46a5; }
+QComboBox:focus, QSpinBox:focus, QDoubleSpinBox:focus, QLineEdit:focus, QPlainTextEdit:focus { border-color: #818cf8; }
 QComboBox QAbstractItemView { background: #202b3d; color: #e2e8f0; selection-background-color: #454581; border: 1px solid #53627c; }
 QTableWidget { background: #111925; alternate-background-color: #162131; gridline-color: #253246; border: 1px solid #28364b; border-radius: 6px; selection-background-color: #303d65; selection-color: white; }
 QHeaderView::section { background: #202b3d; color: #cbd5e1; padding: 8px; border: none; border-right: 1px solid #2c3a50; }

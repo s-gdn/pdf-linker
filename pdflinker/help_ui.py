@@ -11,14 +11,49 @@ Fillable fields are read automatically; the app also attempts to find blank boxe
 writing lines in the PDF. Image-only scans may need manually placed fields.</p>
 
 <h3>2. Link spreadsheet columns to PDF fields</h3>
-<p>Click <b>Auto-link</b> to match field and column names. If some fields remain unlinked,
-a second pass uses tooltips, nearby labels, section context and common abbreviations.
-It can combine numbered tenant names, extract address parts, and format DDMMYYYY dates
-when the PDF structure supports this. Existing links are preserved; uncertain matches stay unlinked.
+<p><b>Exact link</b> links unique normalised matches between field names or detected labels
+and spreadsheet columns. Normalisation handles casing, punctuation and CamelCase; it preserves
+numbers and role words. Use matching names and one clear, unique header per spreadsheet column.</p>
+<p>Original PDF field IDs take priority over inferred labels and are never renamed. Suggest links
+also checks close ID matches before using context. The document is indexed across all pages:
+layout, typography and numbering identify section/question boundaries, including continuation pages
+and parallel columns. Context remains separate from authored field names. A nearby generic label
+such as Name or Address is interpreted within its section, rather than applied to every party.</p>
+<p>Before matching, <b>Review abbreviations</b> shows detected abbreviations and meanings found in
+the document or spreadsheet headings. Check each meaning, select an alternative or type your own.
+Ambiguous and unknown meanings start blank; leaving one blank keeps the abbreviation unchanged.
+Click <b>Continue</b> to use these choices for this run, or <b>Cancel</b> to stop without changing links.
+Related address components share a source, whose heading also provides a role clue for names in the
+same section. Original field names and column headings stay unchanged.</p>
+<p>The field card displays the detected section and question for review. Section detection uses
+document structure, not a list of business-specific section names. Unstyled layouts and scanned
+pages may not supply enough evidence; review or link those fields manually.</p>
+<p><b>Suggest links</b> uses the included Medium models to find similar meanings when wording
+differs. Keep readable labels close to PDF fields and use descriptive column headings. Include
+roles such as Landlord email and Agent email rather than several generic Email labels.
+Image-only scans need readable text or manually named fields. Suggestions can be wrong:
+review them before export. Both buttons keep existing links and shared manual values.
+Remaining field/column pairs are ranked across the form, with a default average model score
+minimum of 50/100. Open <b>File → Settings → Auto-link</b> to change the minimum suggestion score
+and uncertainty threshold (70/100 by default). Minimum changes affect future suggestions;
+uncertainty changes update current outlines and field cards. Settings persist on this computer.
+<b>File &gt; Settings &gt; RRF (experimental)</b> controls rank fusion, enabled by default with Mixedbread at 75% and each other model at
+8.333...%, k = 1 and a 50/100 rank cutoff. Weights normalise automatically; the Auto-link minimum
+still filters average scores. Field scores and yellow highlighting continue to use average scores.
+Only change these values if you understand what you are doing. Disable RRF to use the previous
+matching method. Changes affect future suggestions; existing links remain fixed.
+Columns are reserved for the
+strongest suggestions; address components and explicit mappings can still share a column.
+Below-threshold suggestions stay unlinked. Scores are similarities, not probabilities.
+The complete Windows app includes its models and works offline;
+documents and spreadsheet values are not uploaded. Hover over either button for preparation tips.</p>
+<p>
 Click a PDF field to review
 or select its spreadsheet column. The card stays on that field while you interact with
 the card or its dropdown. Click <b>×</b> to remove a link.</p>
-<p><b>Fields → Field outlines</b> shows linked fields in green and unlinked fields in red.
+<p><b>Fields → Field outlines</b> shows model suggestions below your uncertainty threshold in yellow,
+other linked fields in green and unlinked fields in red. Click a field to see its model score.
+Choosing a column manually confirms that mapping and clears its uncertainty marker.
 The outlines are excluded from exported PDFs. <b>Fields → Clear links</b> removes all
 links. Use <b>Fields → Draw field</b> to place an extra field; click a drawn or
 detected field to change its text size or remove it.</p>

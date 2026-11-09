@@ -1,5 +1,6 @@
 """Build the Windows application and package the public release ZIP."""
 from pathlib import Path
+import argparse
 import hashlib
 import shutil
 import subprocess
@@ -8,15 +9,23 @@ import sys
 
 def main():
     root = Path(__file__).resolve().parents[1]
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--dist-dir', type=Path, default=root / 'dist')
+    options = parser.parse_args()
+    output = options.dist_dir.resolve()
+    # PyInstaller cleans its output folder: keep it inside this workspace's dist.
+    if not output.is_relative_to((root / 'dist').resolve()):
+        raise ValueError('The output directory must be inside the project dist folder.')
+    subprocess.run([sys.executable, str(root / "scripts" / "prepare_models.py")], cwd=root, check=True)
     subprocess.run([sys.executable, str(root / "scripts" / "make_icon.py")], cwd=root, check=True)
-    subprocess.run([sys.executable, "-m", "PyInstaller", "--noconfirm", str(root / "PDFLinker.spec")], cwd=root, check=True)
-    target = root / "dist" / "PDFLinker"
+    subprocess.run([sys.executable, "-m", "PyInstaller", "--noconfirm", "--distpath", str(output), str(root / "PDFLinker.spec")], cwd=root, check=True)
+    target = output / "PDFLinker"
     source = target / "source"
     source.mkdir(exist_ok=True)
     folders = ("pdflinker", "scripts", "docs")
     files = ("README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "pyproject.toml", "PDFLinker.spec", "launcher.py", "run.bat", ".gitignore", ".gitattributes")
     for folder in folders:
-        shutil.copytree(root / folder, source / folder, dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache"))
+        shutil.copytree(root / folder, source / folder, dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__", ".pytest_cache", "models", "phrase_matching.py"))
     for name in files:
         shutil.copy2(root / name, source / name)
     for name in ("README.md", "LICENSE", "THIRD_PARTY_NOTICES.md"):
@@ -24,7 +33,7 @@ def main():
     for folder in ("docs",):
         shutil.copytree(root / folder, target / folder, dirs_exist_ok=True, ignore=shutil.ignore_patterns("__pycache__"))
     copy_dependency_licences(target)
-    archive = shutil.make_archive(str(root / "dist" / "PDFLinker-Windows"), "zip", root / "dist", "PDFLinker")
+    archive = shutil.make_archive(str(root / "dist" / "PDFLinker-Windows"), "zip", output, "PDFLinker")
     with Path(archive).open("rb") as stream:
         checksum = hashlib.file_digest(stream, "sha256").hexdigest()
     Path(archive + ".sha256").write_text(f"{checksum}  {Path(archive).name}\n", encoding="ascii")
@@ -34,7 +43,7 @@ def main():
 def copy_dependency_licences(target):
     import importlib.metadata
     licences = target / "licences"
-    distributions = ("PySide6", "PySide6_Essentials", "PySide6_Addons", "shiboken6", "PyMuPDF", "openpyxl", "et-xmlfile", "xlrd", "numpy", "psutil", "PyYAML", "PyInstaller")
+    distributions = ("PySide6", "PySide6_Essentials", "PySide6_Addons", "shiboken6", "PyMuPDF", "openpyxl", "et-xmlfile", "xlrd", "numpy", "psutil", "PyYAML", "PyInstaller", "rapidfuzz", "onnxruntime", "tokenizers")
     for name in distributions:
         try:
             distribution = importlib.metadata.distribution(name)

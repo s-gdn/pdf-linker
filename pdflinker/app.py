@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
     QSizePolicy,
 )
 
-from .core import Field, Template, auto_link, assigned_fields, field_value, format_field_value, output_name, read_sheet, sheet_names
+from .core import Field, Template, assigned_fields, field_value, format_field_value, output_name, read_sheet, sheet_names
 from .project import read_project, save_project as write_project
 from .jobs import jobs_directory, list_jobs, result_message
 
@@ -46,6 +46,10 @@ class FieldCard(QFrame):
         self.title.setObjectName("cardTitle")
         self.title.setWordWrap(True)
         layout.addWidget(self.title)
+        self.context_note = QLabel()
+        self.context_note.setObjectName('muted')
+        self.context_note.setWordWrap(True)
+        layout.addWidget(self.context_note)
         row = QHBoxLayout()
         self.message = QLabel()
         self.message.setWordWrap(True)
@@ -96,13 +100,17 @@ class FieldCard(QFrame):
         layout.addWidget(self.manual_options)
         self.hide()
 
-    def populate(self, field, headers, column, record, manual_value=None, persistent=False, row_selected=True):
+    def populate(self, field, headers, column, record, manual_value=None, persistent=False, row_selected=True, uncertainty_threshold=.7):
         self.field_key = field.key
         self.row_selected = row_selected
-        self.title.setText(field.label or field.name)
-        self.title.setToolTip(field.name)
+        self.title.setText(field.name if field.match_basis.startswith('field_id') else field.label or field.name)
+        self.title.setToolTip('\n'.join(p for p in (field.name,field.section,field.question,field.nearby_label) if p))
+        context='\n'.join(p for p in (f'Section: {field.section}' if field.section else '',
+                                     f'Question: {field.question}' if field.question else '') if p)
+        self.context_note.setText(context)
+        self.context_note.setVisible(bool(context))
         self.message.setText(f"Linked to: {column}" if column is not None else
-                             "Field not linked. Use auto-link or choose column here.")
+                             "Field not linked. Use Exact link, Suggest links or choose a column here.")
         if column and field.transform_source == column:
             if field.companion_columns:
                 self.message.setText("Linked to: " + " + ".join((column, *field.companion_columns)))
@@ -110,6 +118,11 @@ class FieldCard(QFrame):
                 descriptions = {"line1": "First address line", "line2": "Additional address lines",
                                 "city": "Town/city when identifiable", "postcode": "Postcode"}
                 self.message.setText(self.message.text() + "\nUses: " + descriptions[field.source_part])
+        if column and field.match_score is not None:
+            uncertain=' — Uncertain' if field.match_score < uncertainty_threshold else ''
+            self.message.setText(self.message.text()+f'\nModel score: {field.match_score*100:.1f}/100{uncertain}')
+        if column and field.match_note:
+            self.message.setText(self.message.text()+'\n'+field.match_note)
         active_manual = manual_value is not None
         if active_manual:
             self.message.setText("Manual value — all rows and jobs" if persistent else "Manual value — this row only")
@@ -195,7 +208,7 @@ class Preview(QGraphicsView):
         self.setDragMode(QGraphicsView.DragMode.NoDrag if enabled else QGraphicsView.DragMode.ScrollHandDrag)
         self.setCursor(Qt.CursorShape.CrossCursor if enabled else Qt.CursorShape.ArrowCursor)
 
-    def show_page(self, data: bytes, page_number: int, fields: list[Field], selected: str | None, outlines: bool, links=None):
+    def show_page(self, data: bytes, page_number: int, fields: list[Field], selected: str | None, outlines: bool, links=None, overrides=None, uncertainty_threshold=.7):
         previous_bounds = self.bounds
         previous_center = self.mapToScene(self.viewport().rect().center())
         self.scene().clear()
@@ -219,7 +232,10 @@ class Preview(QGraphicsView):
                 qrect = QRectF(rect.x0, rect.y0, rect.width, rect.height)
                 self.boxes.append((qrect, field.key))
                 if outlines:
-                    color = QColor("#36d399" if field.key in (links or {}) else "#fb7185")
+                    linked=field.key in (links or {})
+                    uncertain=(linked and field.match_score is not None and field.match_score < uncertainty_threshold
+                               and field.constant_value is None and field.key not in (overrides or {}))
+                    color = QColor('#facc15' if uncertain else '#36d399' if linked else '#fb7185')
                     pen = QPen(color, 2 if field.key == selected else 1.3)
                     pen.setCosmetic(True)
                     fill = QColor(color)
@@ -384,8 +400,17 @@ class MainWindow(QMainWindow):
         self.dirty = False
         self.worker = None
         self.job_worker = None
+        self.match_worker = None
+        from .model_packs import PackManager, bundled_model_directory
+        self.pack_manager = PackManager(root=bundled_model_directory())
         self.jobs_path = jobs_directory()
         self.settings = QSettings("PDFLinker", "PDFLinker")
+        from .fusion import default_rrf,validate_rrf,DEFAULT_MINIMUM_SCORE
+        self.suggestion_threshold=max(0,min(100,self.settings.value('suggestionThreshold',DEFAULT_MINIMUM_SCORE,type=int)))
+        self.uncertainty_threshold=max(0,min(100,self.settings.value('uncertaintyThreshold',70,type=int)))
+        import json
+        try:self.rrf_settings=validate_rrf(json.loads(self.settings.value('rrfSettings','{}',type=str)))
+        except (ValueError,TypeError,KeyError,OverflowError):self.rrf_settings=default_rrf()
         self.timer = QTimer(self)
         self.timer.setSingleShot(True)
         self.timer.setInterval(180)
@@ -610,6 +635,7 @@ class MainWindow(QMainWindow):
             self.field_card.hide()
 
     def link_changed(self, key, column):
+        self.match_identity = None
         if not self.template or key not in {f.key for f in self.template.fields}:
             return
         if column is None:
@@ -619,6 +645,9 @@ class MainWindow(QMainWindow):
         else:
             return
         field = next(field for field in self.template.fields if field.key == key)
+        field.match_basis='manual' if column is not None else ''
+        field.match_note=''
+        field.match_score=None
         if column != field.transform_source:
             field.source_part, field.companion_columns, field.transform_source = "", (), ""
         self.mark_dirty()
@@ -630,9 +659,11 @@ class MainWindow(QMainWindow):
         value = row_values.get(field.key, field.constant_value)
         persistent = field.key not in row_values and field.constant_value is not None
         self.field_card.populate(field, self.headers, self.links.get(field.key), self.current_record(),
-                                 value, persistent, self.data_table.currentRow() >= 0)
+                                 value, persistent, self.data_table.currentRow() >= 0,
+                                 uncertainty_threshold=self.uncertainty_threshold/100)
 
     def manual_value_changed(self, key, enabled, value, persistent):
+        self.match_identity = None
         field = next((field for field in self.template.fields if field.key == key), None) if self.template else None
         if field is None:
             return
@@ -696,7 +727,8 @@ class MainWindow(QMainWindow):
             data = self.template.fill(self.links, record, overrides) if record or assigned_fields(self.template.fields, {}, overrides) else self.template.source
             assigned = assigned_fields(self.template.fields, self.links, overrides)
             self.preview.show_page(data, max(self.pages.currentIndex(), 0), self.template.fields,
-                                   self.active_field, self.outlines.isChecked(), assigned)
+                                   self.active_field, self.outlines.isChecked(), assigned, overrides,
+                                   uncertainty_threshold=self.uncertainty_threshold/100)
             row = self.data_table.currentRow()
             self.preview_note.setText(f"Preview: spreadsheet row {row + self.loaded_header + 1}  •  {len(assigned)} / {len(self.template.fields)} fields assigned" if record else "Import a spreadsheet and select a row to preview filled values.")
             self.update_field_card_values()
@@ -715,18 +747,96 @@ class MainWindow(QMainWindow):
         self.require_template()
         if not self.headers:
             raise ValueError("Import a spreadsheet first.")
+        self.match_fields()
+
+    def suggest_links(self):
+        self.require_template()
+        if not self.headers:
+            raise ValueError("Import a spreadsheet first.")
+        self.match_fields(suggest=True)
+
+    def open_settings(self):
+        from .settings_ui import SettingsDialog
+        dialog=SettingsDialog(self.suggestion_threshold,self.uncertainty_threshold,self,rrf=self.rrf_settings)
+        dialog.settings_applied.connect(self.apply_auto_link_settings)
+        dialog.rrf_applied.connect(self.apply_rrf_settings)
+        dialog.exec()
+
+    def apply_rrf_settings(self,config):
+        import json
+        from .fusion import validate_rrf
+        self.rrf_settings=validate_rrf(config)
+        self.settings.setValue('rrfSettings',json.dumps(self.rrf_settings))
+
+    def apply_auto_link_settings(self, minimum_score, uncertainty_threshold):
+        self.suggestion_threshold=max(0,min(100,minimum_score))
+        self.uncertainty_threshold=max(0,min(100,uncertainty_threshold))
+        self.settings.setValue('suggestionThreshold',self.suggestion_threshold)
+        self.settings.setValue('uncertaintyThreshold',self.uncertainty_threshold)
+        self.uncertain_legend.setToolTip(f'Model suggestions scoring below {self.uncertainty_threshold}/100')
+        self.update_field_card_values()
+        self.schedule_preview()
+
+    def match_fields(self, suggest=False):
+        from .field_matching import lite_links
+        if not self.template or not self.headers:
+            return
+        if self.match_worker and self.match_worker.isRunning():
+            raise ValueError('Suggest links is still running. Wait for it to finish.')
+        if suggest:
+            pack_id='medium-v1'
+            from .pack_ui import MatchWorker,AbbreviationDialog
+            from .abbreviations import abbreviation_candidates
+            candidates=abbreviation_candidates(self.template.fields,self.headers)
+            abbreviations={}
+            if candidates:
+                dialog=AbbreviationDialog(candidates,self)
+                if not dialog.exec():return
+                abbreviations=dialog.expansions()
+            self.match_identity=(id(self.template),tuple(self.headers))
+            self.match_worker=MatchWorker(self.pack_manager,pack_id,self.template.fields,self.headers,self.links,self.rows,
+                                          minimum_score=self.suggestion_threshold/100,abbreviations=abbreviations,
+                                          rrf=self.rrf_settings)
+            self.match_worker.result.connect(self.match_finished)
+            self.exact_link_button.setEnabled(False)
+            self.suggest_links_button.setEnabled(False)
+            self.preview_note.setText('Matching fields locally…')
+            self.match_worker.start()
+            return
         before = len(self.links)
-        self.links = auto_link(self.template.fields, self.headers, self.links, rows=self.rows)
+        self.links = lite_links(self.template.fields, self.headers, self.links)
         self.dirty = self.dirty or len(self.links) != before
         self.update_project_label()
         self.update_links()
         self.schedule_preview()
+
+    def match_finished(self,links,error):
+        self.match_worker.wait()
+        self.exact_link_button.setEnabled(True)
+        self.suggest_links_button.setEnabled(True)
+        if error:
+            QMessageBox.warning(self,'Suggest links stopped',error);return
+        if not self.template or self.match_identity!=(id(self.template),tuple(self.headers)):return
+        before=len(self.links)
+        completed={f.key:f for f in self.match_worker.fields}
+        for field in self.template.fields:
+            if field.key in links and field.key not in self.links and field.constant_value is None:
+                self.links[field.key]=links[field.key]
+                matched=completed[field.key]
+                field.source_part=matched.source_part
+                field.companion_columns=matched.companion_columns
+                field.transform_source=matched.transform_source
+                field.match_basis=matched.match_basis
+                field.match_score=matched.match_score
+                field.match_note=matched.match_note
+        if len(self.links)!=before:self.mark_dirty()
+        self.update_links();self.schedule_preview()
     def detect_fields(self):
         self.require_template()
         added = self.template.detect_fields()
         before = len(self.links)
         if self.headers:
-            self.links = auto_link(self.template.fields, self.headers, self.links, rows=self.rows)
+            self.match_fields()
         self.dirty = self.dirty or bool(added) or len(self.links) != before
         self.update_project_label()
         self.update_links()
@@ -741,7 +851,13 @@ class MainWindow(QMainWindow):
         self.preview_note.setText(message)
 
     def clear_links(self):
+        self.match_identity = None
         self.links = {}
+        if self.template:
+            for field in self.template.fields:
+                field.match_score=None
+                field.match_basis=''
+                field.match_note=''
         self.mark_dirty()
         self.update_links()
         self.schedule_preview()
@@ -754,13 +870,14 @@ class MainWindow(QMainWindow):
         self.field_card.hide()
     def add_box(self, rect):
         self.require_template()
-        name, accepted = QInputDialog.getText(self, "New text box", "Field name (use the matching column name for auto-linking):")
+        name, accepted = QInputDialog.getText(self, "New text box", "Field name (use the matching column name for Exact link):")
         if accepted and name.strip():
             field = Field("manual:" + uuid.uuid4().hex, name.strip(), self.pages.currentIndex(), rect,
                           manual=True)
             self.template.fields.append(field)
+            self.template.refresh_context()
             self.mark_dirty()
-            self.links = auto_link(self.template.fields, self.headers, self.links, rows=self.rows)
+            self.match_fields()
             self.update_links()
             self.draw_button.setChecked(False)
             self.preview.set_drawing(False)
@@ -1071,6 +1188,9 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "Export complete", message)
 
     def closeEvent(self, event):
+        if self.match_worker and self.match_worker.isRunning():
+            event.ignore()
+            return
         if (self.worker and self.worker.isRunning()) or (self.job_worker and self.job_worker.isRunning()):
             event.ignore()
             return

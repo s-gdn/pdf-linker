@@ -23,48 +23,8 @@ def words(value):
 
 
 def enrich_context(doc, fields):
-    """Carry section roles across pages and find the question above each field."""
-    section = ""
-    for page in doc:
-        lines = [(line["bbox"], "".join(span["text"] for span in line["spans"]).strip())
-                 for block in page.get_text("dict")["blocks"] for line in block.get("lines", [])]
-        lines = sorted((rect, text) for rect, text in lines if text)
-        headings = sorted([(rect[1], text) for rect, text in lines
-                           if re.match(r"^\d+\.\s+\D", text) and not text.lower().startswith("note")])
-        question_lines = []
-        for box, text in lines:
-            if re.match(r"^\d+\.\d+\s", text):
-                question_lines.append((box, text))
-            elif re.fullmatch(r"\d+\.\d+", text):
-                same_line = [(other[0], label) for other, label in lines
-                             if other[0] >= box[2] and abs(other[1] - box[1]) < 4]
-                if same_line:
-                    question_lines.append((box, text + " " + min(same_line)[1]))
-        for field in fields:
-            if field.page != page.number:
-                continue
-            import pymupdf as fitz
-            rect = fitz.Rect(field.rect)
-            if field.manual:
-                rect = rect * page.derotation_matrix
-            active_section = next((text for y, text in reversed(headings) if y < rect.y0), section)
-            questions = [(box[1], text) for box, text in question_lines if box[0] < rect.x1 and box[1] < rect.y0]
-            question = max(questions, default=(0, ""))[1]
-            # Exclude the notes sidebar; labels and questions must be in the field's column.
-            above = [(max(0, rect.y0 - box[3]) + abs(rect.x0 - box[0]) * .25, text)
-                     for box, text in lines if box[0] < rect.x1 and box[2] > rect.x0
-                     and 0 <= rect.y0 - box[3] <= 65 and len(text) > 2
-                     and not re.fullmatch(r"[\d.\s]+", text)]
-            nearby = min(above, default=(0, ""))[1]
-            local = " ".join(text for box, text in lines if box[0] < rect.x1 and box[2] > rect.x0
-                             and 0 <= rect.y0 - box[3] <= 150)
-            field.context = " | ".join(part for part in (active_section, question, nearby) if part)
-            if not field.label or re.fullmatch(r"(?:text\s*field|field|checkbox|check box)\s*\d*", field.label, re.I):
-                field.label = nearby or field.name
-            if field.label.casefold().startswith("date") and any(word in local.casefold() for word in ("signature", "signed", "print name")):
-                field.context += " | signature"
-        if headings:
-            section = headings[-1][1]
+    from .document_context import build_document_context
+    return build_document_context(doc, fields)
 
 
 @dataclass

@@ -14,7 +14,12 @@ PDF Linker is distributed under GNU AGPLv3. Its dependencies retain their own li
 | PyYAML | MIT | https://github.com/yaml/pyyaml |
 | Python | Python Software Foundation licence and included third-party notices | https://www.python.org/ |
 | PyInstaller bootloader | GPLv2-or-later with the PyInstaller bootloader exception | https://github.com/pyinstaller/pyinstaller |
+| RapidFuzz (local matching runtime) | MIT | https://github.com/rapidfuzz/RapidFuzz |
+| ONNX Runtime (local matching runtime) | MIT | https://github.com/microsoft/onnxruntime |
+| Hugging Face Tokenizers (local matching runtime) | Apache-2.0 | https://github.com/huggingface/tokenizers |
 
 The Windows release includes available dependency licence files in `licences/`. Qt libraries remain separate shared libraries in `_internal/`. The release also includes the application source and build scripts in `source/`.
 
 PyMuPDF and Qt also offer commercial licensing separately from their open-source editions. This release uses their open-source editions.
+
+The Windows app includes the pinned Medium model files: BAAI BGE small/base (MIT), IBM Granite embedding small English R2 (Apache-2.0), and Mixedbread mxbai-rerank-xsmall-v1 (Apache-2.0), using their upstream quantised ONNX conversions. Model provenance, original cards and licence notices are included in `_internal/pdflinker/models/medium-v1/`. These model licences apply separately from the application licence. No High/Gemma models are included in the app.

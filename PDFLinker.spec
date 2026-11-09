@@ -2,12 +2,16 @@
 from pathlib import Path
 
 root = Path(SPECPATH)
+models = root / 'pdflinker' / 'models'
+if not (models / 'medium-v1' / 'installed.json').is_file():
+    raise RuntimeError('Run python scripts/prepare_models.py before building the application.')
 a = Analysis(
     [str(root / 'launcher.py')],
     pathex=[],
     binaries=[],
-    datas=[(str(root / 'pdflinker' / 'assets'), 'pdflinker/assets')],
-    hiddenimports=[],
+    datas=[(str(root / 'pdflinker' / 'assets'), 'pdflinker/assets'),
+           (str(models / 'medium-v1'), 'pdflinker/models/medium-v1')],
+    hiddenimports=['pdflinker.semantic_engine', 'rapidfuzz'],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

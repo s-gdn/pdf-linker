@@ -31,8 +31,11 @@ def main():
     for size, frame in zip(sizes, frames):
         entries.append(struct.pack("<BBBBHHII", size % 256, size % 256, 0, 0, 1, 32, len(frame), offset))
         offset += len(frame)
-    (assets / "icon.ico").write_bytes(struct.pack("<HHH", 0, 1, len(sizes)) + b"".join(entries) + b"".join(frames))
-    (assets / "icon.png").write_bytes(frames[-1])
+    for name, content in (("icon.ico", struct.pack("<HHH", 0, 1, len(sizes)) + b"".join(entries) + b"".join(frames)),
+                          ("icon.png", frames[-1])):
+        destination = assets / name
+        if not destination.exists() or destination.read_bytes() != content:
+            destination.write_bytes(content)
     print("Generated icon.ico and icon.png")
 
 

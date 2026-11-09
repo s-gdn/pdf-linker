@@ -1,0 +1,372 @@
+{
+  "version": 1,
+  "packs": [
+    {
+      "id": "medium-v1",
+      "name": "Medium",
+      "description": "Local semantic matching with ranked suggestions. Review yellow fields before exporting.",
+      "download_bytes": 202260348,
+      "total_download_bytes": 305782016,
+      "url": "https://github.com/s-gdn/pdf-linker/releases/download/model-packs-v1/PDFLinker-Medium-v1.zip",
+      "licence_url": "https://github.com/s-gdn/pdf-linker/releases/tag/model-packs-v1",
+      "requires_terms": false,
+      "sha256": "2179d5dd7b9a0e1ee5af1ce57b76817fef345b535dac2f74afa8afbb8707196a",
+      "files": [
+        {
+          "path": "models/bge/model_quantized.onnx",
+          "size": 34014426,
+          "sha256": "6c9c6101a956d62dfb5e7190c538226c0c5bb9cb27b651234b6df063ee7dbfe4"
+        },
+        {
+          "path": "models/bge/tokenizer.json",
+          "size": 711396,
+          "sha256": "d241a60d5e8f04cc1b2b3e9ef7a4921b27bf526d9f6050ab90f9267a1f9e5c66"
+        },
+        {
+          "path": "models/bge/tokenizer_config.json",
+          "size": 366,
+          "sha256": "9261e7d79b44c8195c1cada2b453e55b00aeb81e907a6664974b4d7776172ab3"
+        },
+        {
+          "path": "models/bge/config.json",
+          "size": 683,
+          "sha256": "fa73f90bf92c8cace1fbcb709626306f2bdbc9ea3e5b5f94b440df9b6aa56350"
+        },
+        {
+          "path": "models/bge/README.md",
+          "size": 3134,
+          "sha256": "ce711ead2cb11725c9c6de69779d918c500ab12c74c5c2437ff0c448ed1566a5"
+        },
+        {
+          "path": "models/granite/model_quantized.onnx",
+          "size": 598902,
+          "sha256": "a3fad524afc3f060216a8ddbb1ac89c9b6498fba8995b5718bde879076a2e9ba"
+        },
+        {
+          "path": "models/granite/model_quantized.onnx_data",
+          "size": 51885568,
+          "sha256": "1f4cf47e4adec7f7ae09db03d071ba8667e07f9a4203142c7efa8d37fe453597"
+        },
+        {
+          "path": "models/granite/tokenizer.json",
+          "size": 2128614,
+          "sha256": "feeb83348dcb033bc6b9d2e1f7906ca9eb2d122845000c9416d894d7c2927149"
+        },
+        {
+          "path": "models/granite/tokenizer_config.json",
+          "size": 20839,
+          "sha256": "ce06781b38bb393db68c9e0709bddd31ef5d88f2c6fbb3fd9f369778fb85e451"
+        },
+        {
+          "path": "models/granite/config.json",
+          "size": 1526,
+          "sha256": "1a1710c20911da8c96179716bf44058e54cca6fa7952cce77be83ef05edae3ee"
+        },
+        {
+          "path": "models/granite/README.md",
+          "size": 11466,
+          "sha256": "99162b472dbdbbda16424dadb484be941bcb7df1b0077808e961386e53485c55"
+        },
+        {
+          "path": "models/mixedbread/model_quantized.onnx",
+          "size": 87245802,
+          "sha256": "15ef19a6de90be7d52b627f2c784107bd806e64826450f41fb75fa4f0179ab30"
+        },
+        {
+          "path": "models/mixedbread/tokenizer.json",
+          "size": 8649139,
+          "sha256": "305674b4d785287feecfb5f73f24aa75e9b57c87c579cfe24fbd207987d4b4c4"
+        },
+        {
+          "path": "models/mixedbread/tokenizer_config.json",
+          "size": 1447,
+          "sha256": "aafc9f36a056307bf0cbfcbd42fe00d9df89083d23db6114466c8bfaedb09ce5"
+        },
+        {
+          "path": "models/mixedbread/config.json",
+          "size": 968,
+          "sha256": "470a53befc79da411cc04e466770d9f219f3c14adb276bfa0a58df28774ceade"
+        },
+        {
+          "path": "models/mixedbread/README.md",
+          "size": 49546,
+          "sha256": "7d0553b55a91f07a820125a5f4ec547489e50493fa2d2d6624fcc0f5725d1c7f"
+        },
+        {
+          "path": "models/mixedbread/LICENSE",
+          "size": 10762,
+          "sha256": "4b0dfefcb74f1e50a8df72a9f2bf0088753f8568bc479387292469b4948705d4"
+        },
+        {
+          "path": "models/bge_base/model_quantized.onnx",
+          "size": 110083337,
+          "sha256": "c9729cc84cbd0e9fecc759505d2be65916c9fe05222d7ea26c65fcb3382af38d"
+        },
+        {
+          "path": "models/bge_base/tokenizer.json",
+          "size": 711396,
+          "sha256": "d241a60d5e8f04cc1b2b3e9ef7a4921b27bf526d9f6050ab90f9267a1f9e5c66"
+        },
+        {
+          "path": "models/bge_base/tokenizer_config.json",
+          "size": 366,
+          "sha256": "9261e7d79b44c8195c1cada2b453e55b00aeb81e907a6664974b4d7776172ab3"
+        },
+        {
+          "path": "models/bge_base/config.json",
+          "size": 717,
+          "sha256": "d83c21fa7366994560727112ef0a31d8a2ec1c280c2a3e66326fdb877f64c91e"
+        },
+        {
+          "path": "models/bge_base/README.md",
+          "size": 3148,
+          "sha256": "1963d4a1a4eddad5efb3c46c9a26d4b4738f13e3f1f6c09117b4d4ee17b515bd"
+        },
+        {
+          "path": "licences/Apache-2.0.txt",
+          "size": 11358,
+          "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+        },
+        {
+          "path": "licences/BGE-MIT.txt",
+          "size": 1065,
+          "sha256": "587a673933425dbc36ec61268d3b954051b2d3ef3c9b322ede357976055ffdd5"
+        },
+        {
+          "path": "NOTICE.txt",
+          "size": 721,
+          "sha256": "592fe916bf05947d433d69b48ae5a39f876d8006c7ee00f19cbb837c2b1ebfc9"
+        },
+        {
+          "path": "recipe.json",
+          "size": 2198,
+          "sha256": "3d2a7b039998d9befa02d43277159b66950db5ab909caf90ca286c17caaff55b"
+        },
+        {
+          "path": "provenance.json",
+          "size": 8624,
+          "sha256": "23ca8b8cb7eb3e2be0c7b44940d6645c5751706984df39f25b488b313b68be52"
+        }
+      ],
+      "models": {
+        "bge": {
+          "name": "bge",
+          "repo": "Xenova/bge-small-en-v1.5",
+          "revision": "ea104dacec62c0de699686887e3f920caeb4f3e3",
+          "files": [
+            {
+              "path": "model_quantized.onnx",
+              "source_path": "onnx/model_quantized.onnx",
+              "size": 34014426,
+              "sha256": "6c9c6101a956d62dfb5e7190c538226c0c5bb9cb27b651234b6df063ee7dbfe4",
+              "url": "https://huggingface.co/Xenova/bge-small-en-v1.5/resolve/ea104dacec62c0de699686887e3f920caeb4f3e3/onnx/model_quantized.onnx"
+            },
+            {
+              "path": "tokenizer.json",
+              "source_path": "tokenizer.json",
+              "size": 711396,
+              "sha256": "d241a60d5e8f04cc1b2b3e9ef7a4921b27bf526d9f6050ab90f9267a1f9e5c66",
+              "url": "https://huggingface.co/Xenova/bge-small-en-v1.5/resolve/ea104dacec62c0de699686887e3f920caeb4f3e3/tokenizer.json"
+            },
+            {
+              "path": "tokenizer_config.json",
+              "source_path": "tokenizer_config.json",
+              "size": 366,
+              "sha256": "9261e7d79b44c8195c1cada2b453e55b00aeb81e907a6664974b4d7776172ab3",
+              "url": "https://huggingface.co/Xenova/bge-small-en-v1.5/resolve/ea104dacec62c0de699686887e3f920caeb4f3e3/tokenizer_config.json"
+            },
+            {
+              "path": "config.json",
+              "source_path": "config.json",
+              "size": 683,
+              "sha256": "fa73f90bf92c8cace1fbcb709626306f2bdbc9ea3e5b5f94b440df9b6aa56350",
+              "url": "https://huggingface.co/Xenova/bge-small-en-v1.5/resolve/ea104dacec62c0de699686887e3f920caeb4f3e3/config.json"
+            },
+            {
+              "path": "README.md",
+              "source_path": "README.md",
+              "size": 3134,
+              "sha256": "ce711ead2cb11725c9c6de69779d918c500ab12c74c5c2437ff0c448ed1566a5",
+              "url": "https://huggingface.co/Xenova/bge-small-en-v1.5/resolve/ea104dacec62c0de699686887e3f920caeb4f3e3/README.md"
+            }
+          ],
+          "weights": "model_quantized.onnx",
+          "licence": null,
+          "reranker": false,
+          "pooling": "cls",
+          "prefix": ""
+        },
+        "granite": {
+          "name": "granite",
+          "repo": "onnx-community/granite-embedding-small-english-r2-ONNX",
+          "revision": "1dc7835ba0cb9c76a3618d0bf0c427c97671b3c8",
+          "files": [
+            {
+              "path": "model_quantized.onnx",
+              "source_path": "onnx/model_quantized.onnx",
+              "size": 598902,
+              "sha256": "a3fad524afc3f060216a8ddbb1ac89c9b6498fba8995b5718bde879076a2e9ba",
+              "url": "https://huggingface.co/onnx-community/granite-embedding-small-english-r2-ONNX/resolve/1dc7835ba0cb9c76a3618d0bf0c427c97671b3c8/onnx/model_quantized.onnx"
+            },
+            {
+              "path": "model_quantized.onnx_data",
+              "source_path": "onnx/model_quantized.onnx_data",
+              "size": 51885568,
+              "sha256": "1f4cf47e4adec7f7ae09db03d071ba8667e07f9a4203142c7efa8d37fe453597",
+              "url": "https://huggingface.co/onnx-community/granite-embedding-small-english-r2-ONNX/resolve/1dc7835ba0cb9c76a3618d0bf0c427c97671b3c8/onnx/model_quantized.onnx_data"
+            },
+            {
+              "path": "tokenizer.json",
+              "source_path": "tokenizer.json",
+              "size": 2128614,
+              "sha256": "feeb83348dcb033bc6b9d2e1f7906ca9eb2d122845000c9416d894d7c2927149",
+              "url": "https://huggingface.co/onnx-community/granite-embedding-small-english-r2-ONNX/resolve/1dc7835ba0cb9c76a3618d0bf0c427c97671b3c8/tokenizer.json"
+            },
+            {
+              "path": "tokenizer_config.json",
+              "source_path": "tokenizer_config.json",
+              "size": 20839,
+              "sha256": "ce06781b38bb393db68c9e0709bddd31ef5d88f2c6fbb3fd9f369778fb85e451",
+              "url": "https://huggingface.co/onnx-community/granite-embedding-small-english-r2-ONNX/resolve/1dc7835ba0cb9c76a3618d0bf0c427c97671b3c8/tokenizer_config.json"
+            },
+            {
+              "path": "config.json",
+              "source_path": "config.json",
+              "size": 1526,
+              "sha256": "1a1710c20911da8c96179716bf44058e54cca6fa7952cce77be83ef05edae3ee",
+              "url": "https://huggingface.co/onnx-community/granite-embedding-small-english-r2-ONNX/resolve/1dc7835ba0cb9c76a3618d0bf0c427c97671b3c8/config.json"
+            },
+            {
+              "path": "README.md",
+              "source_path": "README.md",
+              "size": 11466,
+              "sha256": "99162b472dbdbbda16424dadb484be941bcb7df1b0077808e961386e53485c55",
+              "url": "https://huggingface.co/onnx-community/granite-embedding-small-english-r2-ONNX/resolve/1dc7835ba0cb9c76a3618d0bf0c427c97671b3c8/README.md"
+            }
+          ],
+          "weights": "model_quantized.onnx",
+          "licence": "apache-2.0",
+          "reranker": false,
+          "pooling": "cls",
+          "prefix": ""
+        },
+        "mixedbread": {
+          "name": "mixedbread",
+          "repo": "mixedbread-ai/mxbai-rerank-xsmall-v1",
+          "revision": "b5c6e9da73abc3711f593f705371cdbe9e0fe422",
+          "files": [
+            {
+              "path": "model_quantized.onnx",
+              "source_path": "onnx/model_quantized.onnx",
+              "size": 87245802,
+              "sha256": "15ef19a6de90be7d52b627f2c784107bd806e64826450f41fb75fa4f0179ab30",
+              "url": "https://huggingface.co/mixedbread-ai/mxbai-rerank-xsmall-v1/resolve/b5c6e9da73abc3711f593f705371cdbe9e0fe422/onnx/model_quantized.onnx"
+            },
+            {
+              "path": "tokenizer.json",
+              "source_path": "tokenizer.json",
+              "size": 8649139,
+              "sha256": "305674b4d785287feecfb5f73f24aa75e9b57c87c579cfe24fbd207987d4b4c4",
+              "url": "https://huggingface.co/mixedbread-ai/mxbai-rerank-xsmall-v1/resolve/b5c6e9da73abc3711f593f705371cdbe9e0fe422/tokenizer.json"
+            },
+            {
+              "path": "tokenizer_config.json",
+              "source_path": "tokenizer_config.json",
+              "size": 1447,
+              "sha256": "aafc9f36a056307bf0cbfcbd42fe00d9df89083d23db6114466c8bfaedb09ce5",
+              "url": "https://huggingface.co/mixedbread-ai/mxbai-rerank-xsmall-v1/resolve/b5c6e9da73abc3711f593f705371cdbe9e0fe422/tokenizer_config.json"
+            },
+            {
+              "path": "config.json",
+              "source_path": "config.json",
+              "size": 968,
+              "sha256": "470a53befc79da411cc04e466770d9f219f3c14adb276bfa0a58df28774ceade",
+              "url": "https://huggingface.co/mixedbread-ai/mxbai-rerank-xsmall-v1/resolve/b5c6e9da73abc3711f593f705371cdbe9e0fe422/config.json"
+            },
+            {
+              "path": "README.md",
+              "source_path": "README.md",
+              "size": 49546,
+              "sha256": "7d0553b55a91f07a820125a5f4ec547489e50493fa2d2d6624fcc0f5725d1c7f",
+              "url": "https://huggingface.co/mixedbread-ai/mxbai-rerank-xsmall-v1/resolve/b5c6e9da73abc3711f593f705371cdbe9e0fe422/README.md"
+            },
+            {
+              "path": "LICENSE",
+              "source_path": "LICENSE",
+              "size": 10762,
+              "sha256": "4b0dfefcb74f1e50a8df72a9f2bf0088753f8568bc479387292469b4948705d4",
+              "url": "https://huggingface.co/mixedbread-ai/mxbai-rerank-xsmall-v1/resolve/b5c6e9da73abc3711f593f705371cdbe9e0fe422/LICENSE"
+            }
+          ],
+          "weights": "model_quantized.onnx",
+          "licence": "apache-2.0",
+          "reranker": true,
+          "pooling": "mean",
+          "prefix": ""
+        },
+        "bge_base": {
+          "name": "bge_base",
+          "repo": "Xenova/bge-base-en-v1.5",
+          "revision": "4d6cd88e18e51a5e020c2c305726d76ada9c03cf",
+          "weights": "model_quantized.onnx",
+          "pooling": "cls",
+          "prefix": "",
+          "reranker": false,
+          "files": [
+            {
+              "path": "model_quantized.onnx",
+              "size": 110083337,
+              "sha256": "c9729cc84cbd0e9fecc759505d2be65916c9fe05222d7ea26c65fcb3382af38d",
+              "url": "https://huggingface.co/Xenova/bge-base-en-v1.5/resolve/4d6cd88e18e51a5e020c2c305726d76ada9c03cf/onnx/model_quantized.onnx"
+            },
+            {
+              "path": "tokenizer.json",
+              "size": 711396,
+              "sha256": "d241a60d5e8f04cc1b2b3e9ef7a4921b27bf526d9f6050ab90f9267a1f9e5c66",
+              "url": "https://huggingface.co/Xenova/bge-base-en-v1.5/resolve/4d6cd88e18e51a5e020c2c305726d76ada9c03cf/tokenizer.json"
+            },
+            {
+              "path": "tokenizer_config.json",
+              "size": 366,
+              "sha256": "9261e7d79b44c8195c1cada2b453e55b00aeb81e907a6664974b4d7776172ab3",
+              "url": "https://huggingface.co/Xenova/bge-base-en-v1.5/resolve/4d6cd88e18e51a5e020c2c305726d76ada9c03cf/tokenizer_config.json"
+            },
+            {
+              "path": "config.json",
+              "size": 717,
+              "sha256": "d83c21fa7366994560727112ef0a31d8a2ec1c280c2a3e66326fdb877f64c91e",
+              "url": "https://huggingface.co/Xenova/bge-base-en-v1.5/resolve/4d6cd88e18e51a5e020c2c305726d76ada9c03cf/config.json"
+            },
+            {
+              "path": "README.md",
+              "size": 3148,
+              "sha256": "1963d4a1a4eddad5efb3c46c9a26d4b4738f13e3f1f6c09117b4d4ee17b515bd",
+              "url": "https://huggingface.co/Xenova/bge-base-en-v1.5/resolve/4d6cd88e18e51a5e020c2c305726d76ada9c03cf/README.md"
+            }
+          ],
+          "licence": "mit"
+        }
+      },
+      "recipe": {
+        "members": [
+          {
+            "name": "bge",
+            "weight": 1.0
+          },
+          {
+            "name": "granite",
+            "weight": 1.0
+          },
+          {
+            "name": "mixedbread",
+            "weight": 1.0
+          },
+          {
+            "name": "bge_base",
+            "weight": 1.0
+          }
+        ]
+      }
+    }
+  ]
+}

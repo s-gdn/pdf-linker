@@ -9,3 +9,31 @@ dist/
 *.links.json
 tests/
 examples/
+pdflinker/models/
+
+# Retired benchmark prototype; kept locally for historical tests.
+/pdflinker/phrase_matching.py
+
+# Local tools, caches and editor files.
+.idea/
+.vscode/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.log
+*.tmp
+*.bak
+Thumbs.db
+.DS_Store
+
+# Private documents, job state and credentials.
+*.pdf
+*.xls
+*.xlsx
+*.csv
+job.json
+history.json
+.env
+.env.*
+!.env.example
